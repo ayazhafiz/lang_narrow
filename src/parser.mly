@@ -9,40 +9,55 @@
 %token <string> STRING
 %token <string> IDENT
 
-%token FUN
+%token FN
+%token IF THEN ELSE
+%token IS IN
 %token TYPE_UNIT TYPE_BOOL TYPE_NAT TYPE_STRING
-%token LEFT_PAREN RIGHT_PAREN
+%token LPAREN RPAREN
 %token LEFT_BRACKET RIGHT_BRACKET
 %token LCURLY RCURLY
 %token COMMA
 %token COLON
 %token SEMI
+%token VBAR
 
+%token MODE
 %token EOF
 
 %start toplevel
-%type <Language.program> toplevel
-%type <Language.fn> Fun
+%type <Language.toplevel> toplevel
 %%
 
 toplevel:
-  | EOF                         { { fns=[]; expr=None } }
-  | e = Expr; EOF               { { fns=[]; expr=Some e } }
-  | f = Fun; prog = toplevel    { { prog with fns=f::prog.fns } }
+  | COLON MODE IDENT EOF   { Mode $3 }
+  | Program                { Program $1 }
+
+Program:
+  | EOF                          { { fns=[]; expr=None } }
+  | e = Expr; EOF                { { fns=[]; expr=Some e } }
+  | f = Func; prog = Program     { { prog with fns=f::prog.fns } }
 ;
 
-Fun:
-  | FUN; name = IDENT; LEFT_PAREN; p = Params; RIGHT_PAREN COLON; ty = Type; LCURLY; e = Expr; RCURLY
+Func:
+  | FN; name = IDENT; LPAREN; p = Params; RPAREN COLON; ty = Type; LCURLY; e = Expr; RCURLY
     { Fn (name, p, ty, e) }
 ;
 
 Type:
   | AtomicType  { $1 }
+  | AtomicType VBAR AtomicType UnionSeqType { TyUnion ($1::$3::$4) }
 ;
 
 AtomicType:
-  | TYPE_NAT    { TyNat }
-  | TYPE_STRING { TyString }
+  | TYPE_NAT           { TyNat }
+  | TYPE_STRING        { TyString }
+  | TYPE_BOOL          { TyBool }
+  | LPAREN Type RPAREN { $2 }
+;
+
+UnionSeqType:
+  | { [] }
+  | VBAR AtomicType UnionSeqType { $2::$3 }
 ;
 
 Params:
@@ -51,8 +66,25 @@ Params:
   | id = IDENT; COLON; ty = Type; COMMA; rest = Params { (id, ty)::rest }
 ;
 
-Expr:
+AtomicExpr:
   | IDENT  { Var $1 }
   | NAT    { Nat $1 }
   | STRING { String $1 }
+  | BOOL   { Bool $1 }
+  | IDENT LPAREN ArgList RPAREN
+           { App (Var $1, $3) }
+  | IDENT IS Type
+           { Narrow((Var $1), $3) }
+  | LPAREN Expr RPAREN
+           { $2 }
 ;
+
+Expr:
+  | AtomicExpr { $1 }
+  | IF AtomicExpr THEN Expr ELSE Expr { If($2, $4, $6) }
+;
+
+ArgList:
+  | { [] }
+  | expr = Expr { [expr] }
+  | expr = Expr; COMMA; rest = ArgList { expr::rest }

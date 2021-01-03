@@ -46,8 +46,18 @@ and read = parse
   | nat as b      { NAT  (int_of_string b) }
   | '"'
     { string_literal (Buffer.create 100) lexbuf }
+  | boolean as b  { BOOL (bool_of_string b) }
 
-  | "fun"     { FUN }
+  | "mode"    { MODE }
+
+  | "fn"      { FN }
+  | "if"      { IF }
+  | "then"    { THEN }
+  | "else"    { ELSE }
+
+  (* Type narrowing *)
+  | "is"      { IS }
+  | "in"      { IN }
 
   | "unit"    { TYPE_UNIT }
   | "bool"    { TYPE_BOOL }
@@ -56,8 +66,8 @@ and read = parse
 
   | id as id  { IDENT id }
 
-  | '('       { LEFT_PAREN }
-  | ')'       { RIGHT_PAREN }
+  | '('       { LPAREN }
+  | ')'       { RPAREN }
   | '['       { LEFT_BRACKET }
   | ']'       { RIGHT_BRACKET }
   | '{'       { LCURLY }
@@ -65,6 +75,7 @@ and read = parse
   | ','       { COMMA }
   | ':'       { COLON }
   | ';'       { SEMI }
+  | '|'       { VBAR }
 
   | eof       { EOF }
 
