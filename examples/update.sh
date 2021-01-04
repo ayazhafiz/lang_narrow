@@ -5,10 +5,10 @@ for f in examples/*.{eval,c,out,emit}; do
   rm "$f"
 done
 
-for f in examples/*.txt; do
+for f in examples/*.nl; do
   printf "\e[1mProcessing $f...\e[0m\n"
 
-  bf="examples/$(basename "$f" .txt)"
+  bf="examples/$(basename "$f" .nl)"
   dune exec "src/main.exe" -- -M "eval" "$f" &> "$bf.eval"
   dune exec "src/main.exe" -- -M "codegenC-rt" "$f" &> "$bf.c"
 
