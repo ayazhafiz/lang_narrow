@@ -129,3 +129,12 @@ void print(tagged_any any) {
   _print(any);
   printf("\n");
 }
+
+// User code
+tagged_any _readA(tagged_any _r) {
+  return record_proj(_r, "a");
+}
+int main() {
+  tagged_any __main_result = _readA(make_record(3, "a", make_string("hi"), "b", make_nat(3), "c", make_bool(1)));
+  print(__main_result);
+}

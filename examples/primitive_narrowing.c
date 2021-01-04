@@ -129,3 +129,33 @@ void print(tagged_any any) {
   _print(any);
   printf("\n");
 }
+
+// User code
+tagged_any _strToNat(tagged_any _s) {
+  return make_nat(90);
+}
+tagged_any _dupBool(tagged_any _b) {
+  return _b;
+}
+tagged_any _dupNat(tagged_any _n) {
+  return _n;
+}
+tagged_any _narrow(tagged_any _p) {
+  tagged_any _fresh_0;
+    if (is(_p, NAT)) {
+      _fresh_0 = _dupNat(_p);
+  } else {
+      tagged_any _fresh_1;
+          if (is(_p, BOOL)) {
+          _fresh_1 = _dupBool(_p);
+    } else {
+          _fresh_1 = _strToNat(_p);
+    }
+      _fresh_0 = _fresh_1;
+  }
+  return _fresh_0;
+}
+int main() {
+  tagged_any __main_result = _narrow(make_nat(8));
+  print(__main_result);
+}

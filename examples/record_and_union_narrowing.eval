@@ -1,0 +1,4 @@
+defaultNat :: (): nat
+readNat :: (nat|string): nat
+narrowB :: (nat|{a: bool, b: nat}|{b: string, c: nat}|{noBInMe: nat}): nat
+1729 :: nat

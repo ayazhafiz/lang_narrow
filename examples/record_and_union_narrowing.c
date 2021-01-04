@@ -129,3 +129,36 @@ void print(tagged_any any) {
   _print(any);
   printf("\n");
 }
+
+// User code
+tagged_any _defaultNat() {
+  return make_nat(1729);
+}
+tagged_any _readNat(tagged_any _n) {
+  tagged_any _fresh_0;
+    if (is(_n, NAT)) {
+      _fresh_0 = _n;
+  } else {
+      _fresh_0 = _defaultNat();
+  }
+  return _fresh_0;
+}
+tagged_any _narrowB(tagged_any _p) {
+  tagged_any _fresh_1;
+    if (in(_p, "b")) {
+      _fresh_1 = _readNat(record_proj(_p, "b"));
+  } else {
+      tagged_any _fresh_2;
+          if (in(_p, "noBInMe")) {
+          _fresh_2 = record_proj(_p, "noBInMe");
+    } else {
+          _fresh_2 = _p;
+    }
+      _fresh_1 = _fresh_2;
+  }
+  return _fresh_1;
+}
+int main() {
+  tagged_any __main_result = _narrowB(make_record(6, "explanationA", make_string("This record gains admission to narrowB as it is a subtype of"), "explanationB", make_string("{b: string, c: nat}"), "explanationC", make_string("Through a series of type narrowings the call lands at emission"), "explanationD", make_string("of 1729 via defaultNat() because b is a string."), "b", make_string("not a nat"), "c", make_nat(9)));
+  print(__main_result);
+}

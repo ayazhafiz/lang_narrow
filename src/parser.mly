@@ -20,6 +20,7 @@
 %token COLON
 %token SEMI
 %token VBAR
+%token DOT
 
 %token MODE
 %token EOF
@@ -49,15 +50,22 @@ Type:
 ;
 
 AtomicType:
-  | TYPE_NAT           { TyNat }
-  | TYPE_STRING        { TyString }
-  | TYPE_BOOL          { TyBool }
-  | LPAREN Type RPAREN { $2 }
+  | TYPE_NAT              { TyNat }
+  | TYPE_STRING           { TyString }
+  | TYPE_BOOL             { TyBool }
+  | LCURLY RcdType RCURLY { TyRecord($2) }
+  | LPAREN Type RPAREN    { $2 }
 ;
 
 UnionSeqType:
   | { [] }
   | VBAR AtomicType UnionSeqType { $2::$3 }
+;
+
+RcdType:
+  | { [] }
+  | IDENT COLON Type { [($1, $3)] }
+  | IDENT COLON Type COMMA; rest = RcdType { ($1, $3)::rest }
 ;
 
 Params:
@@ -73,10 +81,17 @@ AtomicExpr:
   | BOOL   { Bool $1 }
   | IDENT LPAREN ArgList RPAREN
            { App (Var $1, $3) }
-  | IDENT IS Type
-           { Narrow((Var $1), $3) }
+  | LCURLY RcdList RCURLY
+           { Record($2) }
   | LPAREN Expr RPAREN
            { $2 }
+  | AtomicExpr DOT IDENT
+           { RecordProj($1, $3) }
+  /* Can only narrow variables; pointless to do so on values directly (why?) */
+  | IDENT IS Type
+           { Narrow((Var $1), $3) }
+  | IDENT IN IDENT
+           { RecordNarrow($1, (Var $3)) }
 ;
 
 Expr:
@@ -88,3 +103,10 @@ ArgList:
   | { [] }
   | expr = Expr { [expr] }
   | expr = Expr; COMMA; rest = ArgList { expr::rest }
+;
+
+RcdList:
+  | { [] }
+  | IDENT COLON Expr { [($1, $3)] }
+  | IDENT COLON Expr COMMA; rest = RcdList { ($1, $3)::rest }
+;

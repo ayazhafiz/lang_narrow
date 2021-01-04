@@ -37,9 +37,31 @@ let fail_if_wrong_type t =
        "Type of \"if\" condition must be a bool or narrowing type; found \"%s\""
        (string_of_ty t))
 
+let fail_rcd_key_nexist rcd key =
+  failwith
+    (Printf.sprintf "Key \"%s\" does not exist on record \"%s\"" key
+       (string_of_expr rcd))
+
+let fail_proj_non_record rcd t =
+  failwith
+    (Printf.sprintf "Non-record \"%s\" of type \"%s\" cannot be projected"
+       (string_of_expr rcd) (string_of_ty t))
+
+let fail_rcd_narrow_always is field rcd =
+  failwith
+    (Printf.sprintf
+       "Record narrowing of %s on %s is redundant, as this is always %s" field
+       (string_of_expr rcd) (string_of_bool is))
+
 (*                                            *)
 (* Error messages above, below real typecheck *)
 (*                                            *)
+
+let simplifyUnion tys =
+  match tys with [] -> TyNever | [ ty ] -> ty | tys -> TyUnion tys
+
+let is_record_of_field field ty =
+  match ty with TyRecord fields -> List.mem_assoc field fields | _ -> false
 
 let rec tyeq t1 t2 =
   match (t1, t2) with
@@ -50,6 +72,15 @@ let rec tyeq t1 t2 =
   | TyBool, TyBool ->
       true
   | TyFn (p1, r1), TyFn (p2, r2) -> List.for_all2 tyeq p1 p2 && tyeq r1 r2
+  | TyUnion f1, TyUnion f2 when List.length f1 = List.length f2 ->
+      List.for_all (fun t1 -> List.exists (tyeq t1) f2) f1
+  | TyRecord f1, TyRecord f2 when List.length f1 = List.length f2 ->
+      List.for_all
+        (fun (n1, t1) ->
+          match List.assoc_opt n1 f2 with
+          | Some t2 -> tyeq t1 t2
+          | None -> false)
+        f1
   | TyNarrowed _, _ | _, TyNarrowed _ ->
       failwith "Narrowed types cannot be compared"
   | _, _ -> false
@@ -64,6 +95,13 @@ let rec is_subtype ctx tyS tyT =
   | TyUnion fieldsS, tyT ->
       List.for_all (fun tyS -> is_subtype ctx tyS tyT) fieldsS
   | ty, TyUnion fields -> List.exists (is_subtype ctx ty) fields
+  | TyRecord fieldsS, TyRecord fieldsT ->
+      List.for_all
+        (fun (name, tyT) ->
+          match List.assoc_opt name fieldsS with
+          | Some tyS -> is_subtype ctx tyS tyT
+          | None -> false)
+        fieldsT
   | TyFn (pS, rS), TyFn (pT, rT) ->
       (* Admission of functions is contravariant on parameters and covariant on return types:
            (nat|string): nat <: (nat): nat|string
@@ -72,9 +110,6 @@ let rec is_subtype ctx tyS tyT =
       && List.for_all2 (fun pS pT -> is_subtype ctx pT pS) pS pT
       && is_subtype ctx rS rT
   | _, _ -> false
-
-let simplifyUnion tys =
-  match tys with [] -> TyNever | [ ty ] -> ty | tys -> TyUnion tys
 
 (** [join ctx ty1 ty2] finds the least upper bound (common supertype) of two types. *)
 let rec join ctx ty1 ty2 =
@@ -96,6 +131,14 @@ let rec join ctx ty1 ty2 =
         simplifyUnion allFields
     | (TyUnion _ as uTy), singleTy | singleTy, (TyUnion _ as uTy) ->
         join ctx uTy (TyUnion [ singleTy ])
+    | TyRecord f1, TyRecord f2 ->
+        let joinedFields =
+          List.filter_map
+            (fun (n, t1) ->
+              Option.map (fun t2 -> (n, join ctx t1 t2)) (List.assoc_opt n f2))
+            f1
+        in
+        TyRecord joinedFields
     | singleTy1, singleTy2 -> TyUnion [ singleTy1; singleTy2 ]
 
 (** [meet ctx ty1 ty2] finds the greatest lower bound (common subtype) of two types. *)
@@ -115,13 +158,32 @@ and meet ctx ty1 ty2 =
         simplifyUnion common
     | (TyUnion _ as uTy), singleTy | singleTy, (TyUnion _ as uTy) ->
         meet ctx uTy (TyUnion [ singleTy ])
+    | TyRecord f1, TyRecord f2 ->
+        let allFields =
+          List.map fst
+          @@ List.append f1
+               (List.filter (fun (n, _) -> not (List.mem_assoc n f1)) f2)
+        in
+        let metFields =
+          List.map
+            (fun n ->
+              match (List.assoc_opt n f1, List.assoc_opt n f2) with
+              | Some t1, Some t2 -> (n, meet ctx t1 t2)
+              | Some t1, None -> (n, t1)
+              | None, Some t2 -> (n, t2)
+              | None, None -> failwith "metFields: impossible state")
+            allFields
+        in
+        TyRecord metFields
     | _, _ -> TyNever
 
 (** [exclude ctx tyB tyE] excludes from [tyB] the type [tyE].
   TODO: should we distribute over unions rather than operating on them?
   *)
 let rec exclude ctx tyB tyE =
-  if tyeq tyB tyE then TyNever
+  (* [exclude nat nat|string] should be [never].
+     Similarly for [exclude T unknown], as everything is a subtype of [unknown]. *)
+  if is_subtype ctx tyB tyE then TyNever
   else
     match (tyB, tyE) with
     | TyFn (pB, rB), TyFn (pE, rE) when List.length pB = List.length pE ->
@@ -137,6 +199,19 @@ let rec exclude ctx tyB tyE =
         simplifyUnion filtered
     | (TyUnion _ as uTy), singleTy -> exclude ctx uTy (TyUnion [ singleTy ])
     | singleTy, (TyUnion _ as uTy) -> exclude ctx (TyUnion [ singleTy ]) uTy
+    | TyRecord fB, TyRecord fE ->
+        let wittled =
+          List.filter_map
+            (fun (n, tB) ->
+              match List.assoc_opt n fE with
+              | Some tE -> (
+                  match exclude ctx tB tE with
+                  | TyNever -> None
+                  | tWittle -> Some (n, tWittle) )
+              | None -> Some (n, tB))
+            fB
+        in
+        TyRecord wittled
     | tyB, _ -> tyB
 
 (** [typecheck ctx expr] returns the type of [expr], raising [Failure] if there
@@ -197,6 +272,43 @@ let rec typecheck ctx expr =
           let tyRight = typecheck ctx right in
           join ctx tyLeft tyRight
       | t -> fail_if_wrong_type t )
+  | Record fields ->
+      let fieldTys = List.map (fun (f, v) -> (f, typecheck ctx v)) fields in
+      TyRecord fieldTys
+  | RecordProj (rcd, field) -> (
+      match typecheck ctx rcd with
+      (* TODO: We can permit projections of types without the field just by
+         typing the projection as [never]. Is this worth it? *)
+      | TyRecord fields -> (
+          match List.assoc_opt field fields with
+          | Some ty -> ty
+          | None -> fail_rcd_key_nexist rcd field )
+      | TyUnion fields as t ->
+          let combinedProjTypes =
+            List.map
+              (function
+                | TyRecord rcdFields when List.mem_assoc field rcdFields ->
+                    List.assoc field rcdFields
+                | _ -> fail_proj_non_record rcd t)
+              fields
+          in
+          simplifyUnion combinedProjTypes
+      | t -> fail_proj_non_record rcd t )
+  | RecordNarrow (field, rcd) -> (
+      (* TODO: All of this could be a lot more elegant, come up with formal typing rules. *)
+      (* TODO: should we just distribute over unions instead? *)
+      match typecheck ctx rcd with
+      | TyRecord fields ->
+          fail_rcd_narrow_always (List.mem_assoc field fields) field rcd
+      | TyUnion fields ->
+          let left, right =
+            List.partition
+              (fun variantTy ->
+                is_subtype ctx variantTy (TyRecord [ (field, TyUnknown) ]))
+              fields
+          in
+          TyNarrowed (rcd, simplifyUnion left, simplifyUnion right)
+      | ty -> TyNarrowed (rcd, TyNever, ty) )
 
 (** [typecheck_fn ctx fn] returns the type of [fn], raising [Failure] if there
  are any type errors. *)

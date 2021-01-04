@@ -6,10 +6,11 @@ type ty =
   | TyBool
   | TyFn of ty list * ty
   | TyUnion of ty list
+  | TyRecord of (string * ty) list
   | TyNarrowed of expr * ty * ty
       (** [TyNarrowing e left right] respresents an expression that has been
-       type-narrowed (see [Narrow]). [left] is the narrowed type, [right] is the
-       expression type excluding the narrow.
+       type-narrowed (see [Narrow] and [RecordNarrow]). [left] is the narrowed
+       type, [right] is the expression type excluding the narrow.
        *)
 
 and expr =
@@ -21,6 +22,10 @@ and expr =
   | Narrow of expr * ty
       (** A type narrowing check, for example "a is string" *)
   | If of expr * expr * expr
+  | Record of (string * expr) list
+  | RecordProj of expr * string  (** A projection of a record, e.g. {a: 1}.a *)
+  | RecordNarrow of string * expr
+      (** A record narrowing check a la field existence, for example "a in myRcd" *)
 
 type fn = Fn of string * (string * ty) list * ty * expr
 
@@ -68,6 +73,12 @@ let rec string_of_ty t =
   | TyNarrowed (e, tyL, tyR) ->
       Printf.sprintf "%s[[L:%s, R:%s]]" (string_of_expr e) (string_of_ty tyL)
         (string_of_ty tyR)
+  | TyRecord fields ->
+      Printf.sprintf "{%s}"
+        (String.concat ", "
+           (List.map
+              (fun (f, t) -> Printf.sprintf "%s: %s" f (string_of_ty t))
+              fields))
 
 and string_of_expr e =
   match e with
@@ -83,3 +94,12 @@ and string_of_expr e =
   | If (c, t, e) ->
       Printf.sprintf "if %s then %s else %s" (string_of_expr c)
         (string_of_expr t) (string_of_expr e)
+  | Record fields ->
+      Printf.sprintf "{%s}"
+        (String.concat ", "
+           (List.map
+              (fun (f, e) -> Printf.sprintf "%s: %s" f (string_of_expr e))
+              fields))
+  | RecordProj (recv, key) -> Printf.sprintf "%s.%s" (string_of_expr recv) key
+  | RecordNarrow (field, rcd) ->
+      Printf.sprintf "%s in %s" field (string_of_expr rcd)

@@ -16,12 +16,16 @@ let rec subst bod x y =
   | Narrow (e, ty) -> Narrow (subst e x y, ty)
   | If (cond, left, right) ->
       If (subst cond x y, subst left x y, subst right x y)
+  | Record fields -> Record (List.map (fun (n, v) -> (n, subst v x y)) fields)
+  | RecordProj (rcd, key) -> RecordProj (subst rcd x y, key)
+  | RecordNarrow (key, rcd) -> RecordNarrow (key, subst rcd x y)
 
-let is_val t = match t with String _ | Nat _ | Bool _ -> true | _ -> false
+let is_val t =
+  match t with String _ | Nat _ | Bool _ | Record _ -> true | _ -> false
 
 let rec small_step ctx t =
   match t with
-  | Var _ | String _ | Nat _ | Bool _ -> raise No_rule_applies
+  | Var _ | String _ | Nat _ | Bool _ | Record _ -> raise No_rule_applies
   | App (Var fn, args) when List.for_all is_val args -> (
       match Ctx.find_opt fn ctx with
       | Some (BindFn (Fn (_, params, _, body), _)) ->
@@ -42,6 +46,10 @@ let rec small_step ctx t =
   | If (Bool true, left, _) -> left
   | If (Bool false, _, right) -> right
   | If (cond, left, right) -> If (small_step ctx cond, left, right)
+  | RecordProj (Record fields, key) -> List.assoc key fields
+  | RecordProj (rcd, key) -> RecordProj (small_step ctx rcd, key)
+  | RecordNarrow (field, Record fields) -> Bool (List.mem_assoc field fields)
+  | RecordNarrow (field, rcd) -> RecordNarrow (field, small_step ctx rcd)
 
 let rec eval ctx t =
   try

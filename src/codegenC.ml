@@ -31,6 +31,10 @@ let rt_make_string e = CCall (CIdent "make_string", [ e ])
 
 let rt_make_bool e = CCall (CIdent "make_bool", [ e ])
 
+let rt_make_record args = CCall (CIdent "make_record", args)
+
+let rt_record_proj e field = CCall (CIdent "record_proj", [ e; CString field ])
+
 let rt_print e = CCall (CIdent "print", [ e ])
 
 let rt_is_tag e ty =
@@ -39,11 +43,14 @@ let rt_is_tag e ty =
     | TyNat -> "NAT"
     | TyString -> "STRING"
     | TyBool -> "BOOL"
+    | TyRecord _ -> "RECORD"
     | t ->
         failwith
           (Printf.sprintf "No runtime type tag for \"%s\"" (string_of_ty t))
   in
   CCall (CIdent "is", [ e; CIdent tyTagMacro ])
+
+let rt_in_record rcd field = CCall (CIdent "in", [ rcd; CString field ])
 
 (*      *)
 (* Emit *)
@@ -102,9 +109,9 @@ let emit_cFn indent (CFn (ty, name, params, block)) =
   String.concat "\n"
     (List.map (fun s -> indentS ^ s) ((header :: block) @ [ footer ]))
 
-(*         *)
-(* Codegen *)
-(*         *)
+(*                     *)
+(* Codegen Translation *)
+(*                     *)
 
 (* TODO: real unique and non-colliding identifiers *)
 let genCIdent originalId = CIdent ("_" ^ originalId)
@@ -152,6 +159,23 @@ let rec codegen_expr expr =
         [ CDeclStmt (CDecl (outV, None)); CIf (cCond, blockLeft, blockRight) ]
       in
       (stmtsCond @ cIfSeq, outV)
+  | Record fields ->
+      let numFields = CNat (List.length fields) in
+      let stmts, mkRcdArgs =
+        List.fold_right
+          (fun (field, value) (stmts, cArgs) ->
+            let cField = CString field in
+            let stmts1, cValue = codegen_expr value in
+            (stmts1 @ stmts, cField :: cValue :: cArgs))
+          fields ([], [])
+      in
+      (stmts, rt_make_record (numFields :: mkRcdArgs))
+  | RecordProj (rcd, field) ->
+      let stmts, cRcd = codegen_expr rcd in
+      (stmts, rt_record_proj cRcd field)
+  | RecordNarrow (field, rcd) ->
+      let stmts, cRcd = codegen_expr rcd in
+      (stmts, rt_in_record cRcd field)
 
 let codegen_fn (Fn (name, params, _, body)) =
   let stmts, bodyExpr = codegen_expr body in

@@ -76,6 +76,7 @@ and read = parse
   | ':'       { COLON }
   | ';'       { SEMI }
   | '|'       { VBAR }
+  | '.'       { DOT }
 
   | eof       { EOF }
 
