@@ -8,10 +8,9 @@ jobs:
       - checkout
       # todo: proper .opam file
       - run: opam install -y dune menhir js_of_ocaml js_of_ocaml-compiler js_of_ocaml-ppx
-      - run: eval $(opam env)
       - run: eval $(opam env) && ./www/build.sh
       - run: mkdir -p /tmp
-      - run: cp www /tmp/docs
+      - run: cp -r www /tmp/docs
       - run: |
             git config --global user.email "builds@circleci.com"
             git config --global user.name "CircleCI"
