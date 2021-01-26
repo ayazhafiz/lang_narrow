@@ -23,4 +23,4 @@
   (targets lang_narrow.js lang_narrow.map)
   (action
     (run %{bin:js_of_ocaml}
-         --source-map js.bc -o lang_narrow.js --pretty)))
+         --source-map %{dep:js.bc} -o lang_narrow.js --pretty)))
