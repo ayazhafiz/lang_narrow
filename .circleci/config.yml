@@ -11,8 +11,12 @@ jobs:
       - checkout
       # todo: proper .opam file
       - run: opam install -y dune menhir js_of_ocaml js_of_ocaml-compiler js_of_ocaml-ppx
+      - save_cache:
+          paths:
+            - ~/.opam
+          key: buster0
       - run: eval $(opam env)
-      - run: ./www/build.sh
+      - run: eval $(opam env) && ./www/build.sh
       - run: mkdir -p /tmp
       - run: cp www /tmp/docs
       - run: |
@@ -28,10 +32,6 @@ jobs:
             else
               echo "Content not changed, nothing to deploy"
             fi          
-      - save_cache:
-          paths:
-            - ~/.opam
-          key: buster0
 
 workflows:
   publish_site:
@@ -39,4 +39,4 @@ workflows:
       - publish_site:
           filters:
             branches:
-              only: [ master ]
+              only: [ base ]
