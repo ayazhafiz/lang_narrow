@@ -5,16 +5,9 @@ jobs:
     docker:
       - image: ocaml/opam2
     steps:
-      - restore_cache:
-          keys:
-            - buster0
       - checkout
       # todo: proper .opam file
       - run: opam install -y dune menhir js_of_ocaml js_of_ocaml-compiler js_of_ocaml-ppx
-      - save_cache:
-          paths:
-            - ~/.opam
-          key: buster0
       - run: eval $(opam env)
       - run: eval $(opam env) && ./www/build.sh
       - run: mkdir -p /tmp
