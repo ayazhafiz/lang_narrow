@@ -1,5 +1,0 @@
-strToNat :: (string): nat
-dupBool :: (bool): bool
-dupNat :: (nat): nat
-narrow :: (string|nat|bool): nat|bool
-8 :: nat|bool
