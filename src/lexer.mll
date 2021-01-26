@@ -59,7 +59,6 @@ and read = parse
   | "is"      { IS }
   | "in"      { IN }
 
-  | "unit"    { TYPE_UNIT }
   | "bool"    { TYPE_BOOL }
   | "nat"     { TYPE_NAT }
   | "string"  { TYPE_STRING }
@@ -68,13 +67,10 @@ and read = parse
 
   | '('       { LPAREN }
   | ')'       { RPAREN }
-  | '['       { LEFT_BRACKET }
-  | ']'       { RIGHT_BRACKET }
   | '{'       { LCURLY }
   | '}'       { RCURLY }
   | ','       { COMMA }
   | ':'       { COLON }
-  | ';'       { SEMI }
   | '|'       { VBAR }
   | '.'       { DOT }
 

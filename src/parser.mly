@@ -12,13 +12,11 @@
 %token FN
 %token IF THEN ELSE
 %token IS IN
-%token TYPE_UNIT TYPE_BOOL TYPE_NAT TYPE_STRING
+%token TYPE_BOOL TYPE_NAT TYPE_STRING
 %token LPAREN RPAREN
-%token LEFT_BRACKET RIGHT_BRACKET
 %token LCURLY RCURLY
 %token COMMA
 %token COLON
-%token SEMI
 %token VBAR
 %token DOT
 
@@ -27,16 +25,18 @@
 
 %start toplevel
 %type <Language.toplevel> toplevel
+%start program
+%type <Language.program> program
 %%
 
 toplevel:
   | COLON MODE IDENT EOF   { Mode $3 }
-  | Program                { Program $1 }
+  | program                { Program $1 }
 
-Program:
+program:
   | EOF                          { { fns=[]; expr=None } }
   | e = Expr; EOF                { { fns=[]; expr=Some e } }
-  | f = Func; prog = Program     { { prog with fns=f::prog.fns } }
+  | f = Func; prog = program     { { prog with fns=f::prog.fns } }
 ;
 
 Func:

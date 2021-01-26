@@ -191,22 +191,25 @@ let codegen_fn (Fn (name, params, _, body)) =
  *)
 let codegen_c fns expr =
   let cFns = List.map codegen_fn fns in
-  let stmts1, cExpr = codegen_expr expr in
-  let stmts2, exprVar = codegen_expr (Var "_main_result") in
-  let mainN = CIdent "main" in
-  let cMain =
-    CFn
-      ( CTyInt,
-        mainN,
-        [],
-        stmts1 @ stmts2
-        @ [
-            CDeclStmt (CDecl (exprVar, Some cExpr));
-            CExprStmt (rt_print exprVar);
-          ] )
-  in
-  let topLevels = List.map (emit_cFn 0) (cFns @ [ cMain ]) in
-  String.concat "\n" topLevels
+  match expr with
+  | None -> List.map (emit_cFn 0) cFns |> String.concat "\n"
+  | Some expr ->
+      let stmts1, cExpr = codegen_expr expr in
+      let stmts2, exprVar = codegen_expr (Var "_main_result") in
+      let mainN = CIdent "main" in
+      let cMain =
+        CFn
+          ( CTyInt,
+            mainN,
+            [],
+            stmts1 @ stmts2
+            @ [
+                CDeclStmt (CDecl (exprVar, Some cExpr));
+                CExprStmt (rt_print exprVar);
+              ] )
+      in
+      let topLevels = List.map (emit_cFn 0) (cFns @ [ cMain ]) in
+      String.concat "\n" topLevels
 
 (** Generates C code with the runtime prepended. *)
 let codegen_c_w_rt fns expr =

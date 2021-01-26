@@ -1,8 +1,9 @@
-open CodegenC
-open Eval
-open Language
+open Lang_narrow
+open Lang_narrow.CodegenC
+open Lang_narrow.Eval
+open Lang_narrow.Language
+open Lang_narrow.Typecheck
 open Lexing
-open Typecheck
 
 let string_of_position lexbuf =
   let pos = lexbuf.lex_curr_p in
@@ -61,8 +62,8 @@ let handle_mode mode ctx fns expr exprTy to_print =
       let evaled = eval ctx expr in
       let exprBind = pr_binding (string_of_expr evaled) (string_of_ty exprTy) in
       to_print @ [ exprBind ]
-  | GenC -> [ codegen_c fns expr ]
-  | GenCAddRt -> [ codegen_c_w_rt fns expr ]
+  | GenC -> [ codegen_c fns (Some expr) ]
+  | GenCAddRt -> [ codegen_c_w_rt fns (Some expr) ]
 
 let process_fn (ctx, to_print) (Fn (name, _, _, _) as fn) =
   let ty = typecheck_fn ctx fn in

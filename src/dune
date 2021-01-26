@@ -3,5 +3,24 @@
   (flags --explain --fixed-exception)
   (modules parser))
 
+(library
+  (name lang_narrow)
+  (modules language lexer parser typecheck eval codegenC))
+
 (executable
-  (name main))
+  (name main)
+  (libraries lang_narrow)
+  (modules main))
+
+(executables
+  (names js)
+  (modules js)
+  (libraries lang_narrow js_of_ocaml)
+  (modes byte)
+  (preprocess (pps js_of_ocaml-ppx)))
+
+(rule
+  (targets lang_narrow.js lang_narrow.map)
+  (action
+    (run %{bin:js_of_ocaml}
+         --source-map js.bc -o lang_narrow.js --pretty)))

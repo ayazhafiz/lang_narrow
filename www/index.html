@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<head>
+  <meta name="viewport" content="width=device-width" />
+  <meta charset="UTF-8" />
+  <meta name="description" content="RCE Playground" />
+  <title>Playground</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/@primer/css/dist/primer.css" />
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    .h100 {
+      height: 100%;
+    }
+    .editor {
+      overflow: hidden;
+    }
+    pre.inner {
+      padding: 0;
+      font-size: 100%;
+      margin: 0;
+    }
+  </style>
+
+  <script src="./lang_narrow.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.10/dist/vue.js"></script>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"
+    integrity="sha512-qoCTmFwBtCPvFhA+WAqatSOrghwpDhFHxwAGh+cppWonXbHA09nG1z5zi4/NGnp8dUhXiVrzA6EnKgJA+fyrpw=="
+    crossorigin="anonymous"
+  ></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.20.0/min/vs/loader.min.js"></script>
+</head>
+
+<body>
+  <article class="markdown-body h100">
+    <div class="d-flex flex-row flex-justify-around h100">
+      <div class="d-flex flex-column col-6 float-left pt-2 pb-4 px-6 h100">
+        <h1>Input</h1>
+        <div id="playground" class="editor flex-1"></div>
+      </div>
+      <div class="col-6 float-left pt-2 pb-4 px-6 h100" id="output">
+        <div id="error" style="display: none">
+          <h1 class="Subhead-heading--danger">Error</h1>
+          <pre id="errormsg"></pre>
+        </div>
+        <div id="results" class="d-flex flex-column flex-justify-around h100">
+          <div class="d-flex flex-column flex-1">
+            <h1>Typings</h1>
+            <div id="typings" class="editor flex-auto"></div>
+          </div>
+
+          <div class="d-flex flex-column flex-1">
+            <h1>C codegen</h1>
+            <div id="codegen" class="editor flex-auto"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  <script type="text/javascript">
+    const DEFAULT_EXAMPLE = `
+fn defaultNat(): nat {
+  1729
+}
+
+fn readNat(n: nat|string): nat {
+  if n is nat
+     then n
+     else defaultNat()
+}
+
+fn narrowBToNat(p: nat|{a: bool, b: nat}|{b: string, c: nat}): nat {
+  if b in p
+     then readNat(p.b)
+     else p
+}
+
+narrowBToNat({b: "not a nat" , c: 9})`.trim();
+    const queryParams = new URLSearchParams(window.location.search);
+    const inputOnLoad = queryParams.get("input")
+      ? LZString.decompressFromEncodedURIComponent(queryParams.get("input"))
+      : DEFAULT_EXAMPLE;
+    const $ = document.querySelector.bind(document);
+
+    function checkProgram(pg, typesEditor, cEditor) {
+      const input = pg.getValue();
+      try {
+        const { bindings, codegen } = langNarrow(input);
+        $("#error").setAttribute("style", "display: none !important");
+        $("#results").setAttribute("style", "display: block");
+        typesEditor.setValue(bindings);
+        cEditor.setValue(codegen);
+      } catch (e) {
+        $("#results").setAttribute("style", "display: none !important");
+        $("#error").setAttribute("style", "display: block");
+        $("#errormsg").innerText = e.message;
+      }
+
+      const queryParams = new URLSearchParams(window.location.search);
+      queryParams.set("input", LZString.compressToEncodedURIComponent(input));
+      const curUrl = `${window.location.pathname}?${queryParams}`;
+      history.replaceState(null, "", curUrl);
+    }
+
+    const proxy = URL.createObjectURL(
+      new Blob(
+        [
+          `self.MonacoEnvironment = { baseUrl: 'https://unpkg.com/monaco-editor@0.21.2/min/' };
+           importScripts('https://unpkg.com/monaco-editor@0.21.2/min/vs/base/worker/workerMain.js');`,
+        ],
+        { type: "text/javascript" }
+      )
+    );
+    require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.21.2/min/vs" } });
+    window.MonacoEnvironment = {
+      getWorkerUrl: () => proxy,
+    };
+
+    require(["vs/editor/editor.main"], function () {
+      const opts = {
+        theme: "vs",
+        fontSize: "15px",
+        padding: { top: "20px" },
+        automaticLayout: true,
+        formatOnType: true,
+        formatOnPaste: true,
+        autoIndent: true,
+      };
+      const pg = monaco.editor.create($("#playground"), {
+        ...opts,
+        value: inputOnLoad,
+        language: "text",
+      });
+      const outopts = {
+        ...opts,
+        value: "",
+        padding: {},
+        readonly: true,
+        lineNumbers: "off",
+        minimap: { enabled: false },
+      };
+      const typesEditor = monaco.editor.create($("#typings"), {
+        ...outopts,
+        language: "text",
+      });
+      const cEditor = monaco.editor.create($("#codegen"), {
+        ...outopts,
+        language: "c",
+      });
+      pg.onDidChangeModelContent(() => checkProgram(pg, typesEditor, cEditor));
+      checkProgram(pg, typesEditor, cEditor);
+    });
+  </script>
+</body>
