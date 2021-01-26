@@ -1,0 +1,34 @@
+version: 2.1
+
+jobs:
+  publish_site:
+    docker:
+      - image: ocaml/opam2
+    steps:
+      - checkout
+      # todo: proper .opam file
+      - run: opam install -y dune menhir js_of_ocaml js_of_ocaml-compiler js_of_ocaml-ppx
+      - run: ./www/build.sh
+      - run: mkdir -p /tmp
+      - run: cp www /tmp/docs
+      - run: |
+            git config --global user.email "builds@circleci.com"
+            git config --global user.name "CircleCI"
+            git checkout gh-pages
+            rm -rf *
+            mv /tmp/docs/* .
+            git add -f .
+            if git commit -m "CircleCI build $CIRCLE_BUILD_NUM" ; then
+              git push -fq > /dev/null
+              echo -e "Deploy completed\n"
+            else
+              echo "Content not changed, nothing to deploy"
+            fi          
+
+workflows:
+  publish_site:
+    jobs:
+      - publish_site:
+          filters:
+            branches:
+              only: [ master ]
