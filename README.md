@@ -1,6 +1,6 @@
 # lang_narrow
 
-A language with flow typing and structural type narrowing.
+A language with flow typing and structural type narrowing. [Try it out](https://ayazhafiz.com/lang_narrow).
 
 See [this blog post](https://ayazhafiz.com/articles/21/lang-narrow) for a
 thorough overview, or the rest of the readme for a simpler one.
