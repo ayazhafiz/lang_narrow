@@ -1,4 +1,5 @@
 open Language
+open Ty
 open Typecheck
 
 exception No_rule_applies

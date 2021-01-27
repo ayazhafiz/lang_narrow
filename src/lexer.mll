@@ -23,7 +23,13 @@ let boolean = "true" | "false"
 
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
 
-rule string_literal strbuf = parse
+rule line_comment = parse
+  | newline
+    { next_line lexbuf; read lexbuf }
+  | _
+    { line_comment lexbuf }
+
+and string_literal strbuf = parse
   | eof
     { EOF }
   | "\\\"" as q
@@ -73,6 +79,8 @@ and read = parse
   | ':'       { COLON }
   | '|'       { VBAR }
   | '.'       { DOT }
+
+  | "//"      { line_comment lexbuf }
 
   | eof       { EOF }
 

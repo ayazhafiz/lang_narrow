@@ -2,6 +2,7 @@
 
 %{
   open Language
+  open Ty
 %}
 
 %token <bool>   BOOL
@@ -46,20 +47,20 @@ Func:
 
 Type:
   | AtomicType  { $1 }
-  | AtomicType VBAR AtomicType UnionSeqType { TyUnion ($1::$3::$4) }
+  | AtomicType VBAR AtomicType UnionSeqType { TyUnion ($4 |> TySet.add $1 |> TySet.add $3) }
 ;
 
 AtomicType:
-  | TYPE_NAT              { TyNat }
-  | TYPE_STRING           { TyString }
-  | TYPE_BOOL             { TyBool }
+  | TYPE_NAT              { TyPrim TyNat }
+  | TYPE_STRING           { TyPrim TyString }
+  | TYPE_BOOL             { TyPrim TyBool }
   | LCURLY RcdType RCURLY { TyRecord($2) }
   | LPAREN Type RPAREN    { $2 }
 ;
 
 UnionSeqType:
-  | { [] }
-  | VBAR AtomicType UnionSeqType { $2::$3 }
+  | { TySet.empty }
+  | VBAR AtomicType UnionSeqType { TySet.add $2 $3 }
 ;
 
 RcdType:

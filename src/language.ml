@@ -1,31 +1,45 @@
-type ty =
-  | TyUnknown  (** Top type *)
-  | TyNever  (** Bottom type *)
-  | TyNat
-  | TyString
-  | TyBool
-  | TyFn of ty list * ty
-  | TyUnion of ty list
-  | TyRecord of (string * ty) list
-  | TyNarrowed of expr * ty * ty
-      (** [TyNarrowing e left right] respresents an expression that has been
+type primitive_ty = TyNat | TyString | TyBool
+
+module rec Ty : sig
+  type ty =
+    | TyUnknown  (** Top type *)
+    | TyNever  (** Bottom type *)
+    | TyPrim of primitive_ty
+    | TyFn of Ty.ty list * Ty.ty
+    | TyUnion of TySet.t
+    | TyRecord of (string * Ty.ty) list
+    | TyNarrowed of expr * Ty.ty * Ty.ty
+        (** [TyNarrowing e left right] respresents an expression that has been
        type-narrowed (see [Narrow] and [RecordNarrow]). [left] is the narrowed
        type, [right] is the expression type excluding the narrow.
        *)
 
-and expr =
-  | Var of string
-  | Nat of int
-  | String of string
-  | Bool of bool
-  | App of expr * expr list  (** Function application *)
-  | Narrow of expr * ty
-      (** A type narrowing check, for example "a is string" *)
-  | If of expr * expr * expr
-  | Record of (string * expr) list
-  | RecordProj of expr * string  (** A projection of a record, e.g. {a: 1}.a *)
-  | RecordNarrow of string * expr
-      (** A record narrowing check a la field existence, for example "a in myRcd" *)
+  and expr =
+    | Var of string
+    | Nat of int
+    | String of string
+    | Bool of bool
+    | App of expr * expr list  (** Function application *)
+    | Narrow of expr * Ty.ty
+        (** A type narrowing check, for example "a is string" *)
+    | If of expr * expr * expr
+    | Record of (string * expr) list
+    | RecordProj of expr * string
+        (** A projection of a record, e.g. {a: 1}.a *)
+    | RecordNarrow of string * expr
+        (** A record narrowing check a la field existence, for example "a in myRcd" *)
+end =
+  Ty
+
+and TySet : sig
+  include Set.S with type elt = Ty.ty
+end = Set.Make (struct
+  type t = Ty.ty
+
+  let compare = compare
+end)
+
+open Ty
 
 type fn = Fn of string * (string * ty) list * ty * expr
 
@@ -62,14 +76,16 @@ let rec string_of_ty t =
   match t with
   | TyUnknown -> "unknown"
   | TyNever -> "never"
-  | TyNat -> "nat"
-  | TyString -> "string"
-  | TyBool -> "bool"
+  | TyPrim TyNat -> "nat"
+  | TyPrim TyString -> "string"
+  | TyPrim TyBool -> "bool"
   | TyFn (p, r) ->
       Printf.sprintf "(%s): %s"
         (String.concat ", " (List.map string_of_ty p))
         (string_of_ty r)
-  | TyUnion fields -> String.concat "|" (List.map string_of_ty fields)
+  | TyUnion fields ->
+      String.concat "|"
+        (TySet.to_seq fields |> List.of_seq |> List.map string_of_ty)
   | TyNarrowed (e, tyL, tyR) ->
       Printf.sprintf "%s[[L:%s, R:%s]]" (string_of_expr e) (string_of_ty tyL)
         (string_of_ty tyR)

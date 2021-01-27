@@ -1,4 +1,5 @@
 open Language
+open Ty
 
 type cExpr =
   | CIdent of string
@@ -40,9 +41,9 @@ let rt_print e = CCall (CIdent "print", [ e ])
 let rt_is_tag e ty =
   let tyTagMacro =
     match ty with
-    | TyNat -> "NAT"
-    | TyString -> "STRING"
-    | TyBool -> "BOOL"
+    | TyPrim TyNat -> "NAT"
+    | TyPrim TyString -> "STRING"
+    | TyPrim TyBool -> "BOOL"
     | TyRecord _ -> "RECORD"
     | t ->
         failwith

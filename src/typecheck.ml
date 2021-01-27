@@ -1,4 +1,5 @@
 open Language
+open Ty
 
 let fail_not_function_ty e =
   failwith
@@ -58,22 +59,21 @@ let fail_rcd_narrow_always is field rcd =
 (*                                            *)
 
 let simplifyUnion tys =
-  match tys with [] -> TyNever | [ ty ] -> ty | tys -> TyUnion tys
+  match TySet.to_seq tys |> List.of_seq with
+  | [] -> TyNever
+  | [ ty ] -> ty
+  | _ -> TyUnion tys
 
 let is_record_of_field field ty =
   match ty with TyRecord fields -> List.mem_assoc field fields | _ -> false
 
 let rec tyeq t1 t2 =
   match (t1, t2) with
-  | TyUnknown, TyUnknown
-  | TyNever, TyNever
-  | TyNat, TyNat
-  | TyString, TyString
-  | TyBool, TyBool ->
-      true
+  | TyUnknown, TyUnknown | TyNever, TyNever -> true
+  | TyPrim a, TyPrim b -> a = b
   | TyFn (p1, r1), TyFn (p2, r2) -> List.for_all2 tyeq p1 p2 && tyeq r1 r2
-  | TyUnion f1, TyUnion f2 when List.length f1 = List.length f2 ->
-      List.for_all (fun t1 -> List.exists (tyeq t1) f2) f1
+  | TyUnion f1, TyUnion f2 when TySet.cardinal f1 = TySet.cardinal f2 ->
+      TySet.for_all (fun t1 -> TySet.exists (tyeq t1) f2) f1
   | TyRecord f1, TyRecord f2 when List.length f1 = List.length f2 ->
       List.for_all
         (fun (n1, t1) ->
@@ -93,8 +93,8 @@ let rec is_subtype ctx tyS tyT =
   | _, TyUnknown -> true
   | TyNever, _ -> true
   | TyUnion fieldsS, tyT ->
-      List.for_all (fun tyS -> is_subtype ctx tyS tyT) fieldsS
-  | ty, TyUnion fields -> List.exists (is_subtype ctx ty) fields
+      TySet.for_all (fun tyS -> is_subtype ctx tyS tyT) fieldsS
+  | ty, TyUnion fields -> TySet.exists (is_subtype ctx ty) fields
   | TyRecord fieldsS, TyRecord fieldsT ->
       List.for_all
         (fun (name, tyT) ->
@@ -125,12 +125,12 @@ let rec join ctx ty1 ty2 =
     | TyUnion f1, TyUnion f2 ->
         (* nat|string ^ string|bool yields nat|string|bool *)
         let allFields =
-          List.append f1
-            (List.filter (fun l -> not (List.exists (tyeq l) f1)) f2)
+          TySet.union f1
+            (TySet.filter (fun l -> not (TySet.exists (tyeq l) f1)) f2)
         in
         simplifyUnion allFields
     | (TyUnion _ as uTy), singleTy | singleTy, (TyUnion _ as uTy) ->
-        join ctx uTy (TyUnion [ singleTy ])
+        join ctx uTy (TyUnion (TySet.singleton singleTy))
     | TyRecord f1, TyRecord f2 ->
         let joinedFields =
           List.filter_map
@@ -139,7 +139,7 @@ let rec join ctx ty1 ty2 =
             f1
         in
         TyRecord joinedFields
-    | singleTy1, singleTy2 -> TyUnion [ singleTy1; singleTy2 ]
+    | singleTy1, singleTy2 -> TyUnion (TySet.of_list [ singleTy1; singleTy2 ])
 
 (** [meet ctx ty1 ty2] finds the greatest lower bound (common subtype) of two types. *)
 and meet ctx ty1 ty2 =
@@ -154,10 +154,10 @@ and meet ctx ty1 ty2 =
         TyFn (meetParams, meetRet)
     | TyUnion f1, TyUnion f2 ->
         (* nat|string ^ string|bool yields string *)
-        let common = List.filter (fun l -> List.exists (tyeq l) f2) f1 in
+        let common = TySet.filter (fun l -> TySet.exists (tyeq l) f2) f1 in
         simplifyUnion common
     | (TyUnion _ as uTy), singleTy | singleTy, (TyUnion _ as uTy) ->
-        meet ctx uTy (TyUnion [ singleTy ])
+        meet ctx uTy (TyUnion (TySet.singleton singleTy))
     | TyRecord f1, TyRecord f2 ->
         let allFields =
           List.map fst
@@ -194,11 +194,13 @@ let rec exclude ctx tyB tyE =
     | TyUnion fB, TyUnion fE ->
         (* (nat|string) - string yields nat *)
         let filtered =
-          List.filter (fun l -> not (List.exists (tyeq l) fE)) fB
+          TySet.filter (fun l -> not (TySet.exists (tyeq l) fE)) fB
         in
         simplifyUnion filtered
-    | (TyUnion _ as uTy), singleTy -> exclude ctx uTy (TyUnion [ singleTy ])
-    | singleTy, (TyUnion _ as uTy) -> exclude ctx (TyUnion [ singleTy ]) uTy
+    | (TyUnion _ as uTy), singleTy ->
+        exclude ctx uTy (TyUnion (TySet.singleton singleTy))
+    | singleTy, (TyUnion _ as uTy) ->
+        exclude ctx (TyUnion (TySet.singleton singleTy)) uTy
     | TyRecord fB, TyRecord fE ->
         let wittled =
           List.filter_map
@@ -220,9 +222,9 @@ let rec typecheck ctx expr =
   match expr with
   | Var n when Ctx.mem n ctx -> Ctx.typeof n ctx
   | Var n -> failwith ("Unbound variable \"" ^ n ^ "\"")
-  | String _ -> TyString
-  | Nat _ -> TyNat
-  | Bool _ -> TyBool
+  | String _ -> TyPrim TyString
+  | Nat _ -> TyPrim TyNat
+  | Bool _ -> TyPrim TyBool
   | App (n, args) -> (
       match typecheck ctx n with
       | TyFn (params, ret) ->
@@ -267,7 +269,7 @@ let rec typecheck ctx expr =
           let tyRight = typecheck ctxRight right in
           join ctx tyLeft tyRight
       | TyNarrowed (e, _, _) -> fail_if_narrow_of_non_var e
-      | TyBool ->
+      | TyPrim TyBool ->
           let tyLeft = typecheck ctx left in
           let tyRight = typecheck ctx right in
           join ctx tyLeft tyRight
@@ -285,7 +287,7 @@ let rec typecheck ctx expr =
           | None -> fail_rcd_key_nexist rcd field )
       | TyUnion fields as t ->
           let combinedProjTypes =
-            List.map
+            TySet.map
               (function
                 | TyRecord rcdFields when List.mem_assoc field rcdFields ->
                     List.assoc field rcdFields
@@ -302,7 +304,7 @@ let rec typecheck ctx expr =
           fail_rcd_narrow_always (List.mem_assoc field fields) field rcd
       | TyUnion fields ->
           let left, right =
-            List.partition
+            TySet.partition
               (fun variantTy ->
                 is_subtype ctx variantTy (TyRecord [ (field, TyUnknown) ]))
               fields
