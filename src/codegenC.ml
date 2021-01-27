@@ -114,15 +114,21 @@ let emit_cFn indent (CFn (ty, name, params, block)) =
 (* Codegen Translation *)
 (*                     *)
 
+type uniq_c_ident = { get : unit -> cExpr; refresh : unit -> unit }
+
 (* TODO: real unique and non-colliding identifiers *)
 let genCIdent originalId = CIdent ("_" ^ originalId)
 
-let genUniqCIdent =
+let uniqCIdent =
   let counter = ref 0 in
-  fun () ->
-    let fresh = CIdent ("_fresh_" ^ string_of_int !counter) in
-    counter := !counter + 1;
-    fresh
+  {
+    get =
+      (fun () ->
+        let fresh = CIdent ("_fresh_" ^ string_of_int !counter) in
+        counter := !counter + 1;
+        fresh);
+    refresh = (fun () -> counter := 0);
+  }
 
 (* codegen_expr :: expr -> (cStmt list, cExpr) *)
 let rec codegen_expr expr =
@@ -145,7 +151,7 @@ let rec codegen_expr expr =
       let stmts, e = codegen_expr e in
       (stmts, rt_is_tag e ty)
   | If (cond, left, right) ->
-      let outV = genUniqCIdent () in
+      let outV = uniqCIdent.get () in
       let stmtsCond, cCond = codegen_expr cond in
 
       let stmtsL, cLeft = codegen_expr left in
@@ -191,6 +197,8 @@ let codegen_fn (Fn (name, params, _, body)) =
     Useful for checking C codegen in the repl.
  *)
 let codegen_c fns expr =
+  (* fresh program <=> restart fresh var counter *)
+  uniqCIdent.refresh ();
   let cFns = List.map codegen_fn fns in
   match expr with
   | None -> List.map (emit_cFn 0) cFns |> String.concat "\n"
