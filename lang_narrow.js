@@ -12162,7 +12162,8 @@
         map(function(param){var p=param[1];return [0,genCIdent(p),0]},params);
       return [0,0,genCIdent(name),_gb_,body$0]}
     function codegen_c(fns,expr)
-     {var cFns=map(codegen_fn,fns);
+     {counter[1] = 0;
+      var cFns=map(codegen_fn,fns);
       if(expr)
        {var
          expr$0=expr[1],
