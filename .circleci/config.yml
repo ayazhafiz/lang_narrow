@@ -3,11 +3,9 @@ version: 2.1
 jobs:
   publish_site:
     docker:
-      - image: ocaml/opam2
+      - image: ayazhafiz/ocaml4lang
     steps:
       - checkout
-      # todo: proper .opam file
-      - run: opam install -y dune menhir js_of_ocaml js_of_ocaml-compiler js_of_ocaml-ppx
       - run: eval $(opam env) && ./www/build.sh
       - run: mkdir -p /tmp
       - run: cp -r www /tmp/docs
