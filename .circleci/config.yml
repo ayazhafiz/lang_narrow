@@ -10,6 +10,7 @@ jobs:
       - run: mkdir -p /tmp
       - run: cp -r www /tmp/docs
       - run: |
+            git reset --hard HEAD
             git config --global user.email "builds@circleci.com"
             git config --global user.name "CircleCI"
             git remote add circleorigin https://${GH_TOKEN}@github.com/ayazhafiz/lang_narrow
