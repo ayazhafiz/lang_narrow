@@ -127,7 +127,7 @@ let rec codegen_expr st expr =
       (stmts @ stmts2, is_tag)
   | If (cond, left, right) ->
       let outV = St.uniqIdent st in
-      let stmtsCond, cCond = codegen_expr st cond in
+      let condStmts, cCond = codegen_expr st cond in
 
       let stmtsL, cLeft = codegen_expr st left in
       let outLeft = `Assign (outV, cLeft) in
@@ -138,12 +138,11 @@ let rec codegen_expr st expr =
       let blockRight = stmtsR @ [ outRight ] in
 
       let cIfSeq =
-        [
-          `Decl (`Decl (`TaggedAny, outV, None));
-          `If (cCond, blockLeft, blockRight);
-        ]
+        [ `Decl (`Decl (`TaggedAny, outV, None)) ]
+        @ condStmts
+        @ [ `If (cCond, blockLeft, blockRight) ]
       in
-      (stmtsCond @ cIfSeq, outV)
+      (cIfSeq, outV)
   | Record { ty = None; _ } -> failwith "record not typed during checking"
   | Record { fields; ty = Some rcdty } ->
       let fls = OrdSMap.to_seq fields |> List.of_seq in

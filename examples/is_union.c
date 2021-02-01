@@ -141,8 +141,8 @@ void print(tagged_any any) {
 
 // User code
 tagged_any _a(tagged_any _p) {
-  const char* _fresh_1[] = {STRING, BOOL};
   tagged_any _fresh_0;
+  const char* _fresh_1[] = {STRING, BOOL};
   if (is(_p, _fresh_1, 2)) {
     _fresh_0 = make_nat(0);
   } else {

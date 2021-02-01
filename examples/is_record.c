@@ -142,8 +142,8 @@ void print(tagged_any any) {
 // User code
 const char* _fresh_1 = "{a: bool, b: bool}";
 tagged_any _a(tagged_any _p) {
-  const char* _fresh_2[] = {_fresh_1};
   tagged_any _fresh_0;
+  const char* _fresh_2[] = {_fresh_1};
   if (is(_p, _fresh_2, 1)) {
     _fresh_0 = record_proj(_p, "a");
   } else {

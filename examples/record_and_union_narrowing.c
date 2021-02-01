@@ -145,8 +145,8 @@ tagged_any _defaultNat() {
   return make_nat(1729);
 }
 tagged_any _readNat(tagged_any _n) {
-  const char* _fresh_1[] = {NAT};
   tagged_any _fresh_0;
+  const char* _fresh_1[] = {NAT};
   if (is(_n, _fresh_1, 1)) {
     _fresh_0 = _n;
   } else {
