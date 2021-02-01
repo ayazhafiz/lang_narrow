@@ -140,17 +140,18 @@ void print(tagged_any any) {
 }
 
 // User code
+const char* _fresh_1 = "{a: bool, b: bool}";
 tagged_any _a(tagged_any _p) {
-  const char* _fresh_1[] = {STRING, BOOL};
+  const char* _fresh_2[] = {_fresh_1};
   tagged_any _fresh_0;
-  if (is(_p, _fresh_1, 2)) {
-    _fresh_0 = make_nat(0);
+  if (is(_p, _fresh_2, 1)) {
+    _fresh_0 = record_proj(_p, "a");
   } else {
-    _fresh_0 = _p;
+    _fresh_0 = make_bool(0);
   }
   return _fresh_0;
 }
 int main() {
-  tagged_any __main_result = _a(make_string("h"));
+  tagged_any __main_result = _a(make_record(_fresh_1, 2, "a", make_bool(1), "b", make_bool(0)));
   print(__main_result);
 }

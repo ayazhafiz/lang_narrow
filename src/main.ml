@@ -62,8 +62,8 @@ let handle_mode mode ctx fns expr exprTy to_print =
       let evaled = eval ctx expr in
       let exprBind = pr_binding (string_of_expr evaled) (string_of_ty exprTy) in
       to_print @ [ exprBind ]
-  | GenC -> [ codegen_c fns (Some expr) ]
-  | GenCAddRt -> [ codegen_c_w_rt fns (Some expr) ]
+  | GenC -> [ codegen_c ctx fns (Some expr) ]
+  | GenCAddRt -> [ codegen_c_w_rt ctx fns (Some expr) ]
 
 let process_fn (ctx, to_print) (Fn (name, _, _, _) as fn) =
   let ty = typecheck_fn ctx fn in

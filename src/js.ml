@@ -48,7 +48,7 @@ let lang_narrow program =
         let ebind = pr_binding (string_of_expr evaled) ety in
         (bindings @ [ ebind ], Some e)
   in
-  let codegen = codegen_c fns expr in
+  let codegen = codegen_c ctx fns expr in
   (String.concat "\n" bindings, codegen)
 
 let _ =

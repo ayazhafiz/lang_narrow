@@ -1,0 +1,2 @@
+a :: ({a: nat, b: nat}|{a: bool, b: bool}): bool
+true :: bool

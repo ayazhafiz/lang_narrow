@@ -3,13 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define NAT "nat"
-#define STRING "string"
-#define BOOL "bool"
-#define RECORD "record"
-
+/**
+ * An arbitrary value in the runtime.
+ * A `tagged_any` consists of a `tag` field tagging the concrete type of the
+ * value and a `val` field holding the concrete value.
+ */
 typedef struct tagged_any tagged_any;
-void print(tagged_any);
 
 typedef struct record {
   int numFields;
@@ -25,32 +24,35 @@ union any {
 } any;
 
 struct tagged_any {
+  int is_rcd;
   const char* tag;
   union any val;
 };
 
+static const char *NAT = "nat", *STRING = "string", *BOOL = "bool";
+
 tagged_any make_nat(int val) {
   union any nat;
   nat.nat = val;
-  tagged_any result = {.tag = NAT, .val = nat};
+  tagged_any result = {.is_rcd = 0, .tag = NAT, .val = nat};
   return result;
 }
 
 tagged_any make_string(const char* val) {
   union any string;
   string.string = val;
-  tagged_any result = {.tag = STRING, .val = string};
+  tagged_any result = {.is_rcd = 0, .tag = STRING, .val = string};
   return result;
 }
 
 tagged_any make_bool(int val) {
   union any bol;
   bol.bool = val;
-  tagged_any result = {.tag = BOOL, .val = bol};
+  tagged_any result = {.is_rcd = 0, .tag = BOOL, .val = bol};
   return result;
 }
 
-tagged_any make_record(int numFields, ...) {
+tagged_any make_record(const char* tag, int numFields, ...) {
   record rcd;
   rcd.numFields = numFields;
   rcd.fields = malloc(numFields * sizeof(const char*));
@@ -65,7 +67,7 @@ tagged_any make_record(int numFields, ...) {
 
   union any r;
   r.record = rcd;
-  tagged_any result = {.tag = RECORD, .val = r};
+  tagged_any result = {.is_rcd = 1, .tag = tag, .val = r};
   return result;
 }
 
@@ -81,7 +83,7 @@ int is(tagged_any val, const char* const* any_of, int num_opts) {
 }
 
 int in(tagged_any rcd, const char* field) {
-  if (!is1(rcd, RECORD)) {
+  if (!rcd.is_rcd) {
     return 0;
   }
   record r = rcd.val.record;
@@ -94,7 +96,7 @@ int in(tagged_any rcd, const char* field) {
 }
 
 tagged_any record_proj(tagged_any rcd, const char* field) {
-  if (!is1(rcd, RECORD)) {
+  if (!rcd.is_rcd) {
     fprintf(stderr, "Runtime error: attempting to project %s\n", rcd.tag);
     exit(1);
   }
@@ -115,7 +117,7 @@ void _print(tagged_any any) {
     printf("%s", any.val.string);
   } else if (is1(any, BOOL)) {
     printf("%s", any.val.bool == 1 ? "true" : "false");
-  } else if (is1(any, RECORD)) {
+  } else if (any.is_rcd) {
     record r = any.val.record;
     printf("{");
     for (int i = 0; i < r.numFields; ++i) {
@@ -138,6 +140,7 @@ void print(tagged_any any) {
 }
 
 // User code
+const char* _fresh_4 = "{explanationA: string, explanationB: string, explanationC: string, explanationD: string, b: string, c: nat}";
 tagged_any _defaultNat() {
   return make_nat(1729);
 }
@@ -167,6 +170,6 @@ tagged_any _narrowB(tagged_any _p) {
   return _fresh_2;
 }
 int main() {
-  tagged_any __main_result = _narrowB(make_record(6, "explanationA", make_string("This record gains admission to narrowB as it is a subtype of"), "explanationB", make_string("{b: string, c: nat}"), "explanationC", make_string("Through a series of type narrowings the call lands at emission"), "explanationD", make_string("of 1729 via defaultNat() because b is a string."), "b", make_string("not a nat"), "c", make_nat(9)));
+  tagged_any __main_result = _narrowB(make_record(_fresh_4, 6, "explanationA", make_string("This record gains admission to narrowB as it is a subtype of"), "explanationB", make_string("{b: string, c: nat}"), "explanationC", make_string("Through a series of type narrowings the call lands at emission"), "explanationD", make_string("of 1729 via defaultNat() because b is a string."), "b", make_string("not a nat"), "c", make_nat(9)));
   print(__main_result);
 }
