@@ -69,12 +69,19 @@ tagged_any make_record(int numFields, ...) {
   return result;
 }
 
-int is(tagged_any val, const char* tag) {
-  return (strcmp(val.tag, tag) == 0) ? 1 : 0;
+int is1(tagged_any val, const char* tag) {
+  return strcmp(val.tag, tag) == 0 ? 1 : 0;
+}
+
+int is(tagged_any val, const char* const* any_of, int num_opts) {
+  for (int i = 0; i < num_opts; ++i) {
+    if (is1(val, any_of[i])) return 1;
+  }
+  return 0;
 }
 
 int in(tagged_any rcd, const char* field) {
-  if (!is(rcd, RECORD)) {
+  if (!is1(rcd, RECORD)) {
     return 0;
   }
   record r = rcd.val.record;
@@ -87,7 +94,7 @@ int in(tagged_any rcd, const char* field) {
 }
 
 tagged_any record_proj(tagged_any rcd, const char* field) {
-  if (!is(rcd, RECORD)) {
+  if (!is1(rcd, RECORD)) {
     fprintf(stderr, "Runtime error: attempting to project %s\n", rcd.tag);
     exit(1);
   }
@@ -102,13 +109,13 @@ tagged_any record_proj(tagged_any rcd, const char* field) {
 }
 
 void _print(tagged_any any) {
-  if (is(any, NAT)) {
+  if (is1(any, NAT)) {
     printf("%d", any.val.nat);
-  } else if (is(any, STRING)) {
+  } else if (is1(any, STRING)) {
     printf("%s", any.val.string);
-  } else if (is(any, BOOL)) {
+  } else if (is1(any, BOOL)) {
     printf("%s", any.val.bool == 1 ? "true" : "false");
-  } else if (is(any, RECORD)) {
+  } else if (is1(any, RECORD)) {
     record r = any.val.record;
     printf("{");
     for (int i = 0; i < r.numFields; ++i) {

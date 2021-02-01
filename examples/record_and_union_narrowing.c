@@ -69,12 +69,19 @@ tagged_any make_record(int numFields, ...) {
   return result;
 }
 
-int is(tagged_any val, const char* tag) {
-  return (strcmp(val.tag, tag) == 0) ? 1 : 0;
+int is1(tagged_any val, const char* tag) {
+  return strcmp(val.tag, tag) == 0 ? 1 : 0;
+}
+
+int is(tagged_any val, const char* const* any_of, int num_opts) {
+  for (int i = 0; i < num_opts; ++i) {
+    if (is1(val, any_of[i])) return 1;
+  }
+  return 0;
 }
 
 int in(tagged_any rcd, const char* field) {
-  if (!is(rcd, RECORD)) {
+  if (!is1(rcd, RECORD)) {
     return 0;
   }
   record r = rcd.val.record;
@@ -87,7 +94,7 @@ int in(tagged_any rcd, const char* field) {
 }
 
 tagged_any record_proj(tagged_any rcd, const char* field) {
-  if (!is(rcd, RECORD)) {
+  if (!is1(rcd, RECORD)) {
     fprintf(stderr, "Runtime error: attempting to project %s\n", rcd.tag);
     exit(1);
   }
@@ -102,13 +109,13 @@ tagged_any record_proj(tagged_any rcd, const char* field) {
 }
 
 void _print(tagged_any any) {
-  if (is(any, NAT)) {
+  if (is1(any, NAT)) {
     printf("%d", any.val.nat);
-  } else if (is(any, STRING)) {
+  } else if (is1(any, STRING)) {
     printf("%s", any.val.string);
-  } else if (is(any, BOOL)) {
+  } else if (is1(any, BOOL)) {
     printf("%s", any.val.bool == 1 ? "true" : "false");
-  } else if (is(any, RECORD)) {
+  } else if (is1(any, RECORD)) {
     record r = any.val.record;
     printf("{");
     for (int i = 0; i < r.numFields; ++i) {
@@ -135,8 +142,9 @@ tagged_any _defaultNat() {
   return make_nat(1729);
 }
 tagged_any _readNat(tagged_any _n) {
+  const char* _fresh_1[] = {NAT};
   tagged_any _fresh_0;
-    if (is(_n, NAT)) {
+    if (is(_n, _fresh_1, 1)) {
       _fresh_0 = _n;
   } else {
       _fresh_0 = _defaultNat();
@@ -144,19 +152,19 @@ tagged_any _readNat(tagged_any _n) {
   return _fresh_0;
 }
 tagged_any _narrowB(tagged_any _p) {
-  tagged_any _fresh_1;
+  tagged_any _fresh_2;
     if (in(_p, "b")) {
-      _fresh_1 = _readNat(record_proj(_p, "b"));
+      _fresh_2 = _readNat(record_proj(_p, "b"));
   } else {
-      tagged_any _fresh_2;
+      tagged_any _fresh_3;
           if (in(_p, "noBInMe")) {
-          _fresh_2 = record_proj(_p, "noBInMe");
+          _fresh_3 = record_proj(_p, "noBInMe");
     } else {
-          _fresh_2 = _p;
+          _fresh_3 = _p;
     }
-      _fresh_1 = _fresh_2;
+      _fresh_2 = _fresh_3;
   }
-  return _fresh_1;
+  return _fresh_2;
 }
 int main() {
   tagged_any __main_result = _narrowB(make_record(6, "explanationA", make_string("This record gains admission to narrowB as it is a subtype of"), "explanationB", make_string("{b: string, c: nat}"), "explanationC", make_string("Through a series of type narrowings the call lands at emission"), "explanationD", make_string("of 1729 via defaultNat() because b is a string."), "b", make_string("not a nat"), "c", make_nat(9)));

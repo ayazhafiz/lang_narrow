@@ -1,2 +1,0 @@
-readA :: ({a: string, b: nat}): string
-"hi" :: string

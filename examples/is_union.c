@@ -69,12 +69,19 @@ tagged_any make_record(int numFields, ...) {
   return result;
 }
 
-int is(tagged_any val, const char* tag) {
-  return (strcmp(val.tag, tag) == 0) ? 1 : 0;
+int is1(tagged_any val, const char* tag) {
+  return strcmp(val.tag, tag) == 0 ? 1 : 0;
+}
+
+int is(tagged_any val, const char* const* any_of, int num_opts) {
+  for (int i = 0; i < num_opts; ++i) {
+    if (is1(val, any_of[i])) return 1;
+  }
+  return 0;
 }
 
 int in(tagged_any rcd, const char* field) {
-  if (!is(rcd, RECORD)) {
+  if (!is1(rcd, RECORD)) {
     return 0;
   }
   record r = rcd.val.record;
@@ -87,7 +94,7 @@ int in(tagged_any rcd, const char* field) {
 }
 
 tagged_any record_proj(tagged_any rcd, const char* field) {
-  if (!is(rcd, RECORD)) {
+  if (!is1(rcd, RECORD)) {
     fprintf(stderr, "Runtime error: attempting to project %s\n", rcd.tag);
     exit(1);
   }
@@ -102,13 +109,13 @@ tagged_any record_proj(tagged_any rcd, const char* field) {
 }
 
 void _print(tagged_any any) {
-  if (is(any, NAT)) {
+  if (is1(any, NAT)) {
     printf("%d", any.val.nat);
-  } else if (is(any, STRING)) {
+  } else if (is1(any, STRING)) {
     printf("%s", any.val.string);
-  } else if (is(any, BOOL)) {
+  } else if (is1(any, BOOL)) {
     printf("%s", any.val.bool == 1 ? "true" : "false");
-  } else if (is(any, RECORD)) {
+  } else if (is1(any, RECORD)) {
     record r = any.val.record;
     printf("{");
     for (int i = 0; i < r.numFields; ++i) {
@@ -131,31 +138,17 @@ void print(tagged_any any) {
 }
 
 // User code
-tagged_any _strToNat(tagged_any _s) {
-  return make_nat(90);
-}
-tagged_any _dupBool(tagged_any _b) {
-  return _b;
-}
-tagged_any _dupNat(tagged_any _n) {
-  return _n;
-}
-tagged_any _narrow(tagged_any _p) {
+tagged_any _a(tagged_any _p) {
+  const char* _fresh_1[] = {STRING, BOOL};
   tagged_any _fresh_0;
-    if (is(_p, NAT)) {
-      _fresh_0 = _dupNat(_p);
+    if (is(_p, _fresh_1, 2)) {
+      _fresh_0 = make_nat(0);
   } else {
-      tagged_any _fresh_1;
-          if (is(_p, BOOL)) {
-          _fresh_1 = _dupBool(_p);
-    } else {
-          _fresh_1 = _strToNat(_p);
-    }
-      _fresh_0 = _fresh_1;
+      _fresh_0 = _p;
   }
   return _fresh_0;
 }
 int main() {
-  tagged_any __main_result = _narrow(make_nat(8));
+  tagged_any __main_result = _a(make_string("h"));
   print(__main_result);
 }

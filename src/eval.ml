@@ -42,7 +42,11 @@ let rec small_step ctx t =
       in
       App (fn, lower_single args)
   | Narrow (e, ty) when is_val e ->
-      if tyeq (typecheck ctx e) ty then Bool true else Bool false
+      let tyE = typecheck ctx e in
+      let res =
+        match ty with TyUnion u -> TySet.exists (tyeq tyE) u | t -> tyeq tyE t
+      in
+      Bool res
   | Narrow (e, ty) -> Narrow (small_step ctx e, ty)
   | If (Bool true, left, _) -> left
   | If (Bool false, _, right) -> right
