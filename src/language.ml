@@ -1,5 +1,10 @@
 type primitive_ty = TyNat | TyString | TyBool
 
+module OrdSMap = Map.Make (String)
+(** An OrdSMap is an _Ord_ered _S_tring _Map_ that provides iteration in
+    ascending lexicographic order of the keys and performs comparisons by pair
+    equality rather than by position. *)
+
 module rec Ty : sig
   type ty =
     | TyUnknown  (** Top type *)
@@ -7,7 +12,7 @@ module rec Ty : sig
     | TyPrim of primitive_ty
     | TyFn of ty list * ty
     | TyUnion of TySet.t
-    | TyRecord of (string * ty) list
+    | TyRecord of ty OrdSMap.t
     | TyNarrowed of expr * ty * ty
         (** [TyNarrowing e left right] respresents an expression that has been
        type-narrowed (see [Narrow] and [RecordNarrow]). [left] is the narrowed
@@ -24,7 +29,7 @@ module rec Ty : sig
         (** A type narrowing check, for example "a is string" *)
     | If of expr * expr * expr
     | Record of {
-        fields : (string * expr) list;
+        fields : expr OrdSMap.t;
         mutable ty : ty option;
             (** A record literal. The record type, instantiated during
                 typechecking, for use in evaluation and codegen of narrowing
@@ -56,7 +61,7 @@ type toplevel = Program of program | Mode of string
 type bind = BindFn of fn * ty | BindVar of ty
 
 module Ctx = struct
-  include Map.Make (String)
+  include OrdSMap
 
   let to_string show ctx =
     fold (fun k v result -> k ^ ": " ^ show v ^ ";\n" ^ result) ctx ""
@@ -98,9 +103,9 @@ let rec string_of_ty t =
   | TyRecord fields ->
       Printf.sprintf "{%s}"
         (String.concat ", "
-           (List.map
-              (fun (f, t) -> Printf.sprintf "%s: %s" f (string_of_ty t))
-              fields))
+           ( OrdSMap.to_seq fields |> List.of_seq
+           |> List.map (fun (f, t) ->
+                  Printf.sprintf "%s: %s" f (string_of_ty t)) ))
 
 and string_of_expr e =
   match e with
@@ -119,9 +124,9 @@ and string_of_expr e =
   | Record { fields; _ } ->
       Printf.sprintf "{%s}"
         (String.concat ", "
-           (List.map
-              (fun (f, e) -> Printf.sprintf "%s: %s" f (string_of_expr e))
-              fields))
+           ( OrdSMap.to_seq fields |> List.of_seq
+           |> List.map (fun (f, e) ->
+                  Printf.sprintf "%s: %s" f (string_of_expr e)) ))
   | RecordProj (recv, key) -> Printf.sprintf "%s.%s" (string_of_expr recv) key
   | RecordNarrow (field, rcd) ->
       Printf.sprintf "%s in %s" field (string_of_expr rcd)

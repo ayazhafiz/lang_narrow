@@ -140,7 +140,7 @@ void print(tagged_any any) {
 }
 
 // User code
-const char* _fresh_4 = "{explanationA: string, explanationB: string, explanationC: string, explanationD: string, b: string, c: nat}";
+const char* _fresh_4 = "{b: string, c: nat, explanationA: string, explanationB: string, explanationC: string, explanationD: string}";
 tagged_any _defaultNat() {
   return make_nat(1729);
 }
@@ -170,6 +170,6 @@ tagged_any _narrowB(tagged_any _p) {
   return _fresh_2;
 }
 int main() {
-  tagged_any __main_result = _narrowB(make_record(_fresh_4, 6, "explanationA", make_string("This record gains admission to narrowB as it is a subtype of"), "explanationB", make_string("{b: string, c: nat}"), "explanationC", make_string("Through a series of type narrowings the call lands at emission"), "explanationD", make_string("of 1729 via defaultNat() because b is a string."), "b", make_string("not a nat"), "c", make_nat(9)));
+  tagged_any __main_result = _narrowB(make_record(_fresh_4, 6, "b", make_string("not a nat"), "c", make_nat(9), "explanationA", make_string("This record gains admission to narrowB as it is a subtype of"), "explanationB", make_string("{b: string, c: nat}"), "explanationC", make_string("Through a series of type narrowings the call lands at emission"), "explanationD", make_string("of 1729 via defaultNat() because b is a string.")));
   print(__main_result);
 }

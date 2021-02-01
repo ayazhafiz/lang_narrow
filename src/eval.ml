@@ -18,7 +18,7 @@ let rec subst bod x y =
   | If (cond, left, right) ->
       If (subst cond x y, subst left x y, subst right x y)
   | Record { fields; ty } ->
-      Record { fields = List.map (fun (n, v) -> (n, subst v x y)) fields; ty }
+      Record { fields = OrdSMap.map (fun v -> subst v x y) fields; ty }
   | RecordProj (rcd, key) -> RecordProj (subst rcd x y, key)
   | RecordNarrow (key, rcd) -> RecordNarrow (key, subst rcd x y)
 
@@ -52,10 +52,10 @@ let rec small_step ctx t =
   | If (Bool true, left, _) -> left
   | If (Bool false, _, right) -> right
   | If (cond, left, right) -> If (small_step ctx cond, left, right)
-  | RecordProj (Record { fields; _ }, key) -> List.assoc key fields
+  | RecordProj (Record { fields; _ }, key) -> OrdSMap.find key fields
   | RecordProj (rcd, key) -> RecordProj (small_step ctx rcd, key)
   | RecordNarrow (field, Record { fields; _ }) ->
-      Bool (List.mem_assoc field fields)
+      Bool (OrdSMap.mem field fields)
   | RecordNarrow (field, rcd) -> RecordNarrow (field, small_step ctx rcd)
 
 let rec eval ctx t =

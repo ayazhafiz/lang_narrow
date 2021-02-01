@@ -146,13 +146,14 @@ let rec codegen_expr st expr =
       (stmtsCond @ cIfSeq, outV)
   | Record { ty = None; _ } -> failwith "record not typed during checking"
   | Record { fields; ty = Some rcdty } ->
+      let fls = OrdSMap.to_seq fields |> List.of_seq in
       let stmts, rcd =
         List.fold_right
           (fun (field, value) (stmts, r) ->
             let cField = `String field in
             let stmts1, cValue = codegen_expr st value in
             (stmts1 @ stmts, (cField, cValue) :: r))
-          fields ([], [])
+          fls ([], [])
       in
       (stmts, rt_make_record (St.tagRcd st rcdty) rcd)
   | RecordProj (rcd, field) ->

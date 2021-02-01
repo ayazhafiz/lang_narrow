@@ -54,7 +54,7 @@ AtomicType:
   | TYPE_NAT              { TyPrim TyNat }
   | TYPE_STRING           { TyPrim TyString }
   | TYPE_BOOL             { TyPrim TyBool }
-  | LCURLY RcdType RCURLY { TyRecord($2) }
+  | LCURLY RcdType RCURLY { TyRecord($2 |> List.to_seq |> OrdSMap.of_seq) }
   | LPAREN Type RPAREN    { $2 }
 ;
 
@@ -83,7 +83,7 @@ AtomicExpr:
   | IDENT LPAREN ArgList RPAREN
            { App (Var $1, $3) }
   | LCURLY RcdList RCURLY
-           { Record {fields=$2; ty=None} }
+           { Record {fields=$2 |> List.to_seq |> OrdSMap.of_seq; ty=None} }
   | LPAREN Expr RPAREN
            { $2 }
   | AtomicExpr DOT IDENT

@@ -64,9 +64,6 @@ let simplifyUnion tys =
   | [ ty ] -> ty
   | _ -> TyUnion tys
 
-let is_record_of_field field ty =
-  match ty with TyRecord fields -> List.mem_assoc field fields | _ -> false
-
 let rec tyeq t1 t2 =
   match (t1, t2) with
   | TyUnknown, TyUnknown | TyNever, TyNever -> true
@@ -74,10 +71,10 @@ let rec tyeq t1 t2 =
   | TyFn (p1, r1), TyFn (p2, r2) -> List.for_all2 tyeq p1 p2 && tyeq r1 r2
   | TyUnion f1, TyUnion f2 when TySet.cardinal f1 = TySet.cardinal f2 ->
       TySet.for_all (fun t1 -> TySet.exists (tyeq t1) f2) f1
-  | TyRecord f1, TyRecord f2 when List.length f1 = List.length f2 ->
-      List.for_all
-        (fun (n1, t1) ->
-          match List.assoc_opt n1 f2 with
+  | TyRecord f1, TyRecord f2 when OrdSMap.cardinal f1 = OrdSMap.cardinal f2 ->
+      OrdSMap.for_all
+        (fun n1 t1 ->
+          match OrdSMap.find_opt n1 f2 with
           | Some t2 -> tyeq t1 t2
           | None -> false)
         f1
@@ -96,9 +93,9 @@ let rec is_subtype ctx tyS tyT =
       TySet.for_all (fun tyS -> is_subtype ctx tyS tyT) fieldsS
   | ty, TyUnion fields -> TySet.exists (is_subtype ctx ty) fields
   | TyRecord fieldsS, TyRecord fieldsT ->
-      List.for_all
-        (fun (name, tyT) ->
-          match List.assoc_opt name fieldsS with
+      OrdSMap.for_all
+        (fun name tyT ->
+          match OrdSMap.find_opt name fieldsS with
           | Some tyS -> is_subtype ctx tyS tyT
           | None -> false)
         fieldsT
@@ -132,13 +129,15 @@ let rec join ctx ty1 ty2 =
     | (TyUnion _ as uTy), singleTy | singleTy, (TyUnion _ as uTy) ->
         join ctx uTy (TyUnion (TySet.singleton singleTy))
     | TyRecord f1, TyRecord f2 ->
-        let joinedFields =
-          List.filter_map
-            (fun (n, t1) ->
-              Option.map (fun t2 -> (n, join ctx t1 t2)) (List.assoc_opt n f2))
-            f1
+        let joined =
+          OrdSMap.merge
+            (fun _ t1 t2 ->
+              match (t1, t2) with
+              | Some t1, Some t2 -> Some (join ctx t1 t2)
+              | _ -> None)
+            f1 f2
         in
-        TyRecord joinedFields
+        TyRecord joined
     | singleTy1, singleTy2 -> TyUnion (TySet.of_list [ singleTy1; singleTy2 ])
 
 (** [meet ctx ty1 ty2] finds the greatest lower bound (common subtype) of two types. *)
@@ -159,20 +158,8 @@ and meet ctx ty1 ty2 =
     | (TyUnion _ as uTy), singleTy | singleTy, (TyUnion _ as uTy) ->
         meet ctx uTy (TyUnion (TySet.singleton singleTy))
     | TyRecord f1, TyRecord f2 ->
-        let allFields =
-          List.map fst
-          @@ List.append f1
-               (List.filter (fun (n, _) -> not (List.mem_assoc n f1)) f2)
-        in
         let metFields =
-          List.map
-            (fun n ->
-              match (List.assoc_opt n f1, List.assoc_opt n f2) with
-              | Some t1, Some t2 -> (n, meet ctx t1 t2)
-              | Some t1, None -> (n, t1)
-              | None, Some t2 -> (n, t2)
-              | None, None -> failwith "metFields: impossible state")
-            allFields
+          OrdSMap.union (fun _ t1 t2 -> Some (meet ctx t1 t2)) f1 f2
         in
         TyRecord metFields
     | _, _ -> TyNever
@@ -202,17 +189,7 @@ let rec exclude ctx tyB tyE =
     | singleTy, (TyUnion _ as uTy) ->
         exclude ctx (TyUnion (TySet.singleton singleTy)) uTy
     | TyRecord fB, TyRecord fE ->
-        let wittled =
-          List.filter_map
-            (fun (n, tB) ->
-              match List.assoc_opt n fE with
-              | Some tE -> (
-                  match exclude ctx tB tE with
-                  | TyNever -> None
-                  | tWittle -> Some (n, tWittle) )
-              | None -> Some (n, tB))
-            fB
-        in
+        let wittled = OrdSMap.filter (fun n _ -> OrdSMap.mem n fE) fB in
         TyRecord wittled
     | tyB, _ -> tyB
 
@@ -276,7 +253,7 @@ let rec typecheck ctx expr =
       | t -> fail_if_wrong_type t )
   | Record { ty = Some t; _ } -> t
   | Record ({ fields; _ } as r) ->
-      let fieldTys = List.map (fun (f, v) -> (f, typecheck ctx v)) fields in
+      let fieldTys = OrdSMap.map (typecheck ctx) fields in
       let rcdty = TyRecord fieldTys in
       r.ty <- Some rcdty;
       rcdty
@@ -284,15 +261,15 @@ let rec typecheck ctx expr =
       match typecheck ctx rcd with
       (* TODO: match the blog post rules completely (https://ayazhafiz.com/articles/21/lang-narrow) *)
       | TyRecord fields -> (
-          match List.assoc_opt field fields with
+          match OrdSMap.find_opt field fields with
           | Some ty -> ty
           | None -> fail_rcd_key_nexist rcd field )
       | TyUnion fields as t ->
           let combinedProjTypes =
             TySet.map
               (function
-                | TyRecord rcdFields when List.mem_assoc field rcdFields ->
-                    List.assoc field rcdFields
+                | TyRecord rcdFields when OrdSMap.mem field rcdFields ->
+                    OrdSMap.find field rcdFields
                 | _ -> fail_proj_non_record rcd t)
               fields
           in
@@ -302,12 +279,13 @@ let rec typecheck ctx expr =
       (* TODO: match the blog post rules completely (https://ayazhafiz.com/articles/21/lang-narrow) *)
       match typecheck ctx rcd with
       | TyRecord fields ->
-          fail_rcd_narrow_always (List.mem_assoc field fields) field rcd
+          fail_rcd_narrow_always (OrdSMap.mem field fields) field rcd
       | TyUnion fields ->
           let left, right =
             TySet.partition
               (fun variantTy ->
-                is_subtype ctx variantTy (TyRecord [ (field, TyUnknown) ]))
+                is_subtype ctx variantTy
+                  (TyRecord (OrdSMap.singleton field TyUnknown)))
               fields
           in
           TyNarrowed (rcd, simplifyUnion left, simplifyUnion right)
