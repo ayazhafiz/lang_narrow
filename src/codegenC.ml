@@ -3,37 +3,32 @@ open Ty
 open Typecheck
 
 type cType =
-  | CTyTaggedAny
-  | CTyInt
-  | CTyChar
-  | CTyPtr of cType
-  | CTyArr of cType
-  | CTyConst of cType
+  [ `TaggedAny | `Int | `Char | `Ptr of cType | `Arr of cType | `Const of cType ]
 
 type cExpr =
-  | CIdent of string
-  | CNat of int
-  | CString of string
-  | CBool of bool
-  | CCall of cExpr * cExpr list
-  | CArray of cExpr list
+  [ `Ident of string
+  | `Nat of int
+  | `String of string
+  | `Bool of bool
+  | `Call of cExpr * cExpr list
+  | `Array of cExpr list ]
 
-type cDecl = CDecl of cType * cExpr * cExpr option
+type cDecl = [ `Decl of cType * cExpr * cExpr option ]
 
 type cStmt =
-  | CDeclStmt of cDecl
-  | CAssign of cExpr * cExpr
-  | CExprStmt of cExpr
-  | CReturn of cExpr
-  | CIf of cExpr * cBlock * cBlock
+  [ `Decl of cDecl
+  | `Assign of cExpr * cExpr
+  | `ExprStmt of cExpr
+  | `Return of cExpr
+  | `If of cExpr * cBlock * cBlock ]
 
 and cBlock = cStmt list
 
 type cTopLevel =
-  | CFn of cType * cExpr * cDecl list * cBlock
-      (** cFn is a C function with a name, parameter list, and a return expression.
-          Any parameters must always be of type "tagged_any". *)
-  | CDeclT of cDecl
+  [ `Fn of cType * cExpr * cDecl list * cBlock
+    (** cFn is a C function with a name, parameter list, and a return expression.
+            Any parameters must always be of type "tagged_any". *)
+  | `Decl of cDecl ]
 
 module St = struct
   type t = {
@@ -50,7 +45,7 @@ module St = struct
   let ctx t = t.ctx
 
   let uniqIdent t =
-    let fresh = CIdent ("_fresh_" ^ string_of_int t.counter) in
+    let fresh = `Ident ("_fresh_" ^ string_of_int t.counter) in
     t.counter <- t.counter + 1;
     fresh
 
@@ -60,43 +55,43 @@ module St = struct
         | Some (name, _) -> name
         | None ->
             let ident = uniqIdent t in
-            let tag = CString (string_of_ty ty) in
+            let tag = `String (string_of_ty ty) in
             t.type_tags <- (ty, (ident, tag)) :: t.type_tags;
             ident )
     | _ -> failwith "not a record"
 
   let codegen_tagDecls t =
-    let ty = CTyConst (CTyPtr CTyChar) in
+    let ty = `Const (`Ptr `Char) in
     List.map
-      (fun (_, (name, v)) -> CDeclT (CDecl (ty, name, Some v)))
+      (fun (_, (name, v)) -> `Decl (`Decl (ty, name, Some v)))
       t.type_tags
 end
 
 (* TODO: real unique and non-colliding identifiers *)
-let genCIdent originalId = CIdent ("_" ^ originalId)
+let gen `Ident originalId = `Ident ("_" ^ originalId)
 
-let rt_make_nat e = CCall (CIdent "make_nat", [ e ])
+let rt_make_nat e = `Call (`Ident "make_nat", [ e ])
 
-let rt_make_string e = CCall (CIdent "make_string", [ e ])
+let rt_make_string e = `Call (`Ident "make_string", [ e ])
 
-let rt_make_bool e = CCall (CIdent "make_bool", [ e ])
+let rt_make_bool e = `Call (`Ident "make_bool", [ e ])
 
 let rt_make_record ty fields =
-  CCall
-    ( CIdent "make_record",
+  `Call
+    ( `Ident "make_record",
       ty
-      :: CNat (List.length fields)
+      :: `Nat (List.length fields)
       :: List.concat_map (fun (a, b) -> [ a; b ]) fields )
 
-let rt_record_proj e field = CCall (CIdent "record_proj", [ e; CString field ])
+let rt_record_proj e field = `Call (`Ident "record_proj", [ e; `String field ])
 
-let rt_print e = CCall (CIdent "print", [ e ])
+let rt_print e = `Call (`Ident "print", [ e ])
 
 let rt_is_tag st e ty =
   let rec tag = function
-    | TyPrim TyNat -> [ CIdent "NAT" ]
-    | TyPrim TyString -> [ CIdent "STRING" ]
-    | TyPrim TyBool -> [ CIdent "BOOL" ]
+    | TyPrim TyNat -> [ `Ident "NAT" ]
+    | TyPrim TyString -> [ `Ident "STRING" ]
+    | TyPrim TyBool -> [ `Ident "BOOL" ]
     | TyRecord _ as ty -> [ St.tagRcd st ty ]
     | TyUnion v -> TySet.to_seq v |> List.of_seq |> List.concat_map tag
     | t ->
@@ -105,11 +100,11 @@ let rt_is_tag st e ty =
   in
   let tags = tag ty in
   let tagsV = St.uniqIdent st in
-  let tagsTy = CTyArr (CTyConst (CTyPtr CTyChar)) in
-  let tagsDecl = CDeclStmt (CDecl (tagsTy, tagsV, Some (CArray (tag ty)))) in
-  ([ tagsDecl ], CCall (CIdent "is", [ e; tagsV; CNat (List.length tags) ]))
+  let tagsTy = `Arr (`Const (`Ptr `Char)) in
+  let tagsDecl = `Decl (`Decl (tagsTy, tagsV, Some (`Array (tag ty)))) in
+  ([ tagsDecl ], `Call (`Ident "is", [ e; tagsV; `Nat (List.length tags) ]))
 
-let rt_in_record rcd field = CCall (CIdent "in", [ rcd; CString field ])
+let rt_in_record rcd field = `Call (`Ident "in", [ rcd; `String field ])
 
 (*                     *)
 (* Codegen Translation *)
@@ -118,10 +113,10 @@ let rt_in_record rcd field = CCall (CIdent "in", [ rcd; CString field ])
 (* codegen_expr :: state -> expr -> (cStmt list, cExpr) *)
 let rec codegen_expr st expr =
   match expr with
-  | Var n -> ([], genCIdent n)
-  | Nat n -> ([], rt_make_nat (CNat n))
-  | String s -> ([], rt_make_string (CString s))
-  | Bool b -> ([], rt_make_bool (CBool b))
+  | Var n -> ([], gen `Ident n)
+  | Nat n -> ([], rt_make_nat (`Nat n))
+  | String s -> ([], rt_make_string (`String s))
+  | Bool b -> ([], rt_make_bool (`Bool b))
   | App (n, args) ->
       let stmts, call = codegen_expr st n in
       let stmts, args =
@@ -131,7 +126,7 @@ let rec codegen_expr st expr =
             (stmts1 @ stmts, cA :: cArgs))
           args (stmts, [])
       in
-      (stmts, CCall (call, args))
+      (stmts, `Call (call, args))
   | Narrow (e, ty) ->
       let stmts, e = codegen_expr st e in
       let stmts2, is_tag = rt_is_tag st e ty in
@@ -141,17 +136,17 @@ let rec codegen_expr st expr =
       let stmtsCond, cCond = codegen_expr st cond in
 
       let stmtsL, cLeft = codegen_expr st left in
-      let outLeft = CAssign (outV, cLeft) in
+      let outLeft = `Assign (outV, cLeft) in
       let blockLeft = stmtsL @ [ outLeft ] in
 
       let stmtsR, cRight = codegen_expr st right in
-      let outRight = CAssign (outV, cRight) in
+      let outRight = `Assign (outV, cRight) in
       let blockRight = stmtsR @ [ outRight ] in
 
       let cIfSeq =
         [
-          CDeclStmt (CDecl (CTyTaggedAny, outV, None));
-          CIf (cCond, blockLeft, blockRight);
+          `Decl (`Decl (`TaggedAny, outV, None));
+          `If (cCond, blockLeft, blockRight);
         ]
       in
       (stmtsCond @ cIfSeq, outV)
@@ -159,7 +154,7 @@ let rec codegen_expr st expr =
       let stmts, rcd =
         List.fold_right
           (fun (field, value) (stmts, r) ->
-            let cField = CString field in
+            let cField = `String field in
             let stmts1, cValue = codegen_expr st value in
             (stmts1 @ stmts, (cField, cValue) :: r))
           fields ([], [])
@@ -176,11 +171,11 @@ let rec codegen_expr st expr =
 
 let codegen_fn state (Fn (name, params, _, body)) =
   let stmts, bodyExpr = codegen_expr state body in
-  let body = stmts @ [ CReturn bodyExpr ] in
-  CFn
-    ( CTyTaggedAny,
-      genCIdent name,
-      List.map (fun (p, _) -> CDecl (CTyTaggedAny, genCIdent p, None)) params,
+  let body = stmts @ [ `Return bodyExpr ] in
+  `Fn
+    ( `TaggedAny,
+      gen `Ident name,
+      List.map (fun (p, _) -> `Decl (`TaggedAny, gen `Ident p, None)) params,
       body )
 
 (*      *)
@@ -190,29 +185,29 @@ let codegen_fn state (Fn (name, params, _, body)) =
 let lines = String.split_on_char '\n'
 
 let rec emit_cTy = function
-  | CTyTaggedAny -> "tagged_any"
-  | CTyInt -> "int"
-  | CTyChar -> "char"
-  | CTyPtr t -> Printf.sprintf "%s*" (emit_cTy t)
-  | CTyArr t -> Printf.sprintf "%s[]" (emit_cTy t)
-  | CTyConst t -> Printf.sprintf "const %s" (emit_cTy t)
+  | `TaggedAny -> "tagged_any"
+  | `Int -> "int"
+  | `Char -> "char"
+  | `Ptr t -> Printf.sprintf "%s*" (emit_cTy t)
+  | `Arr t -> Printf.sprintf "%s[]" (emit_cTy t)
+  | `Const t -> Printf.sprintf "const %s" (emit_cTy t)
 
 let rec emit_cExpr e =
   match e with
-  | CIdent s -> s
-  | CNat n -> string_of_int n
-  | CString s -> Printf.sprintf "\"%s\"" (String.escaped s)
-  | CBool true -> "1"
-  | CBool false -> "0"
-  | CCall (n, args) ->
+  | `Ident s -> s
+  | `Nat n -> string_of_int n
+  | `String s -> Printf.sprintf "\"%s\"" (String.escaped s)
+  | `Bool true -> "1"
+  | `Bool false -> "0"
+  | `Call (n, args) ->
       Printf.sprintf "%s(%s)" (emit_cExpr n)
         (String.concat ", " (List.map emit_cExpr args))
-  | CArray es ->
+  | `Array es ->
       List.map emit_cExpr es |> String.concat ", " |> Printf.sprintf "{%s}"
 
-let emit_cDecl (CDecl (ty, n, e)) =
+let emit_cDecl (`Decl (ty, n, e)) =
   let rec pHeader = function
-    | CTyArr t -> Printf.sprintf "%s[]" (pHeader t)
+    | `Arr t -> Printf.sprintf "%s[]" (pHeader t)
     | t -> Printf.sprintf "%s %s" (emit_cTy t) (emit_cExpr n)
   in
   let header = pHeader ty in
@@ -225,12 +220,12 @@ let rec emit_cStmt indent s =
   let indentS = String.init indent (fun _ -> ' ') in
   let parts =
     match s with
-    | CDeclStmt d -> [ Printf.sprintf "%s;" (emit_cDecl d) ]
-    | CExprStmt e -> [ Printf.sprintf "%s;" (emit_cExpr e) ]
-    | CReturn e -> [ Printf.sprintf "return %s;" (emit_cExpr e) ]
-    | CAssign (e1, e2) ->
+    | `Decl d -> [ Printf.sprintf "%s;" (emit_cDecl d) ]
+    | `ExprStmt e -> [ Printf.sprintf "%s;" (emit_cExpr e) ]
+    | `Return e -> [ Printf.sprintf "return %s;" (emit_cExpr e) ]
+    | `Assign (e1, e2) ->
         [ Printf.sprintf "%s = %s;" (emit_cExpr e1) (emit_cExpr e2) ]
-    | CIf (cond, left, right) ->
+    | `If (cond, left, right) ->
         let bLeft = List.map (emit_cStmt indent) left in
         let bRight = List.map (emit_cStmt indent) right in
         [ Printf.sprintf "if (%s) {" (emit_cExpr cond) ]
@@ -242,7 +237,7 @@ let rec emit_cStmt indent s =
   String.concat "\n" (List.map (fun s -> indentS ^ s) parts)
 
 let emit_cTop = function
-  | CFn (ty, name, params, block) ->
+  | `Fn (ty, name, params, block) ->
       let block = List.map (emit_cStmt 2) block in
       (* Initialize all params as type of tagged_any, like everything else. *)
       let params = List.map emit_cDecl params in
@@ -252,7 +247,7 @@ let emit_cTop = function
       in
       let footer = "}" in
       String.concat "\n" ((header :: List.concat_map lines block) @ [ footer ])
-  | CDeclT decl -> Printf.sprintf "%s;" (emit_cDecl decl)
+  | `Decl decl -> Printf.sprintf "%s;" (emit_cDecl decl)
 
 (** Generates C code for the program, excluding the runtime code.
     Useful for checking C codegen in the repl. *)
@@ -265,16 +260,16 @@ let codegen_c ctx fns expr =
     | Some expr ->
         let stmts1, cExpr = codegen_expr state expr in
         let stmts2, exprVar = codegen_expr state (Var "_main_result") in
-        let mainN = CIdent "main" in
+        let mainN = `Ident "main" in
         let cMain =
-          CFn
-            ( CTyInt,
+          `Fn
+            ( `Int,
               mainN,
               [],
               stmts1 @ stmts2
               @ [
-                  CDeclStmt (CDecl (CTyTaggedAny, exprVar, Some cExpr));
-                  CExprStmt (rt_print exprVar);
+                  `Decl (`Decl (`TaggedAny, exprVar, Some cExpr));
+                  `ExprStmt (rt_print exprVar);
                 ] )
         in
         [ cMain ]
