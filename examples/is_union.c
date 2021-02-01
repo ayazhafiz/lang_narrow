@@ -141,10 +141,10 @@ void print(tagged_any any) {
 tagged_any _a(tagged_any _p) {
   const char* _fresh_1[] = {STRING, BOOL};
   tagged_any _fresh_0;
-    if (is(_p, _fresh_1, 2)) {
-      _fresh_0 = make_nat(0);
+  if (is(_p, _fresh_1, 2)) {
+    _fresh_0 = make_nat(0);
   } else {
-      _fresh_0 = _p;
+    _fresh_0 = _p;
   }
   return _fresh_0;
 }

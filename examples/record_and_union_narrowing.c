@@ -144,25 +144,25 @@ tagged_any _defaultNat() {
 tagged_any _readNat(tagged_any _n) {
   const char* _fresh_1[] = {NAT};
   tagged_any _fresh_0;
-    if (is(_n, _fresh_1, 1)) {
-      _fresh_0 = _n;
+  if (is(_n, _fresh_1, 1)) {
+    _fresh_0 = _n;
   } else {
-      _fresh_0 = _defaultNat();
+    _fresh_0 = _defaultNat();
   }
   return _fresh_0;
 }
 tagged_any _narrowB(tagged_any _p) {
   tagged_any _fresh_2;
-    if (in(_p, "b")) {
-      _fresh_2 = _readNat(record_proj(_p, "b"));
+  if (in(_p, "b")) {
+    _fresh_2 = _readNat(record_proj(_p, "b"));
   } else {
-      tagged_any _fresh_3;
-          if (in(_p, "noBInMe")) {
-          _fresh_3 = record_proj(_p, "noBInMe");
+    tagged_any _fresh_3;
+    if (in(_p, "noBInMe")) {
+      _fresh_3 = record_proj(_p, "noBInMe");
     } else {
-          _fresh_3 = _p;
+      _fresh_3 = _p;
     }
-      _fresh_2 = _fresh_3;
+    _fresh_2 = _fresh_3;
   }
   return _fresh_2;
 }

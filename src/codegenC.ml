@@ -155,6 +155,8 @@ let codegen_fn (Fn (name, params, _, body)) =
 (* Emit *)
 (*      *)
 
+let lines = String.split_on_char '\n'
+
 let rec emit_cTy = function
   | CTyTaggedAny -> "tagged_any"
   | CTyInt -> "int"
@@ -189,27 +191,26 @@ let emit_cDecl (CDecl (ty, n, e)) =
 
 let rec emit_cStmt indent s =
   let indentS = String.init indent (fun _ -> ' ') in
-  let emitS =
+  let parts =
     match s with
-    | CDeclStmt d -> Printf.sprintf "%s;" (emit_cDecl d)
-    | CExprStmt e -> Printf.sprintf "%s;" (emit_cExpr e)
-    | CReturn e -> Printf.sprintf "return %s;" (emit_cExpr e)
+    | CDeclStmt d -> [ Printf.sprintf "%s;" (emit_cDecl d) ]
+    | CExprStmt e -> [ Printf.sprintf "%s;" (emit_cExpr e) ]
+    | CReturn e -> [ Printf.sprintf "return %s;" (emit_cExpr e) ]
     | CAssign (e1, e2) ->
-        Printf.sprintf "%s = %s;" (emit_cExpr e1) (emit_cExpr e2)
+        [ Printf.sprintf "%s = %s;" (emit_cExpr e1) (emit_cExpr e2) ]
     | CIf (cond, left, right) ->
-        let bLeft = List.map (emit_cStmt (indent + 2)) left in
-        let bRight = List.map (emit_cStmt (indent + 2)) right in
-        let parts =
-          [ Printf.sprintf "if (%s) {" (emit_cExpr cond) ]
-          @ bLeft @ [ "} else {" ] @ bRight @ [ "}" ]
-        in
-        String.concat "\n" (List.map (fun s -> indentS ^ s) parts)
+        let bLeft = List.map (emit_cStmt indent) left in
+        let bRight = List.map (emit_cStmt indent) right in
+        [ Printf.sprintf "if (%s) {" (emit_cExpr cond) ]
+        @ List.concat_map lines bLeft
+        @ [ "} else {" ]
+        @ List.concat_map lines bRight
+        @ [ "}" ]
   in
-  indentS ^ emitS
+  String.concat "\n" (List.map (fun s -> indentS ^ s) parts)
 
-let emit_cFn indent (CFn (ty, name, params, block)) =
-  let indentS = String.init indent (fun _ -> ' ') in
-  let block = List.map (emit_cStmt (indent + 2)) block in
+let emit_cFn (CFn (ty, name, params, block)) =
+  let block = List.map (emit_cStmt 2) block in
   (* Initialize all params as type of tagged_any, like everything else. *)
   let params = List.map emit_cDecl params in
   let header =
@@ -217,8 +218,7 @@ let emit_cFn indent (CFn (ty, name, params, block)) =
       (String.concat ", " params)
   in
   let footer = "}" in
-  String.concat "\n"
-    (List.map (fun s -> indentS ^ s) ((header :: block) @ [ footer ]))
+  String.concat "\n" ((header :: List.concat_map lines block) @ [ footer ])
 
 (** Generates C code for the program, excluding the runtime code.
     Useful for checking C codegen in the repl.
@@ -228,7 +228,7 @@ let codegen_c fns expr =
   uniqCIdent.refresh ();
   let cFns = List.map codegen_fn fns in
   match expr with
-  | None -> List.map (emit_cFn 0) cFns |> String.concat "\n"
+  | None -> List.map emit_cFn cFns |> String.concat "\n"
   | Some expr ->
       let stmts1, cExpr = codegen_expr expr in
       let stmts2, exprVar = codegen_expr (Var "_main_result") in
@@ -244,7 +244,7 @@ let codegen_c fns expr =
                 CExprStmt (rt_print exprVar);
               ] )
       in
-      let topLevels = List.map (emit_cFn 0) (cFns @ [ cMain ]) in
+      let topLevels = List.map emit_cFn (cFns @ [ cMain ]) in
       String.concat "\n" topLevels
 
 (** Generates C code with the runtime prepended. *)
