@@ -274,13 +274,15 @@ let rec typecheck ctx expr =
           let tyRight = typecheck ctx right in
           join ctx tyLeft tyRight
       | t -> fail_if_wrong_type t )
-  | Record fields ->
+  | Record { ty = Some t; _ } -> t
+  | Record ({ fields; _ } as r) ->
       let fieldTys = List.map (fun (f, v) -> (f, typecheck ctx v)) fields in
-      TyRecord fieldTys
+      let rcdty = TyRecord fieldTys in
+      r.ty <- Some rcdty;
+      rcdty
   | RecordProj (rcd, field) -> (
       match typecheck ctx rcd with
-      (* TODO: We can permit projections of types without the field just by
-         typing the projection as [never]. Is this worth it? *)
+      (* TODO: match the blog post rules completely (https://ayazhafiz.com/articles/21/lang-narrow) *)
       | TyRecord fields -> (
           match List.assoc_opt field fields with
           | Some ty -> ty
@@ -297,8 +299,7 @@ let rec typecheck ctx expr =
           simplifyUnion combinedProjTypes
       | t -> fail_proj_non_record rcd t )
   | RecordNarrow (field, rcd) -> (
-      (* TODO: All of this could be a lot more elegant, come up with formal typing rules. *)
-      (* TODO: should we just distribute over unions instead? *)
+      (* TODO: match the blog post rules completely (https://ayazhafiz.com/articles/21/lang-narrow) *)
       match typecheck ctx rcd with
       | TyRecord fields ->
           fail_rcd_narrow_always (List.mem_assoc field fields) field rcd

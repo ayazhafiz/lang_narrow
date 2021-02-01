@@ -5,10 +5,10 @@ module rec Ty : sig
     | TyUnknown  (** Top type *)
     | TyNever  (** Bottom type *)
     | TyPrim of primitive_ty
-    | TyFn of Ty.ty list * Ty.ty
+    | TyFn of ty list * ty
     | TyUnion of TySet.t
-    | TyRecord of (string * Ty.ty) list
-    | TyNarrowed of expr * Ty.ty * Ty.ty
+    | TyRecord of (string * ty) list
+    | TyNarrowed of expr * ty * ty
         (** [TyNarrowing e left right] respresents an expression that has been
        type-narrowed (see [Narrow] and [RecordNarrow]). [left] is the narrowed
        type, [right] is the expression type excluding the narrow.
@@ -20,10 +20,16 @@ module rec Ty : sig
     | String of string
     | Bool of bool
     | App of expr * expr list  (** Function application *)
-    | Narrow of expr * Ty.ty
+    | Narrow of expr * ty
         (** A type narrowing check, for example "a is string" *)
     | If of expr * expr * expr
-    | Record of (string * expr) list
+    | Record of {
+        fields : (string * expr) list;
+        mutable ty : ty option;
+            (** A record literal. The record type, instantiated during
+                typechecking, for use in evaluation and codegen of narrowing
+                expressions involving a record. *)
+      }
     | RecordProj of expr * string
         (** A projection of a record, e.g. {a: 1}.a *)
     | RecordNarrow of string * expr
@@ -110,7 +116,7 @@ and string_of_expr e =
   | If (c, t, e) ->
       Printf.sprintf "if %s then %s else %s" (string_of_expr c)
         (string_of_expr t) (string_of_expr e)
-  | Record fields ->
+  | Record { fields; _ } ->
       Printf.sprintf "{%s}"
         (String.concat ", "
            (List.map

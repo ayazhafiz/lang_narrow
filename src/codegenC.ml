@@ -1,6 +1,5 @@
 open Language
 open Ty
-open Typecheck
 
 type cType =
   [ `TaggedAny | `Int | `Char | `Ptr of cType | `Arr of cType | `Const of cType ]
@@ -32,17 +31,12 @@ type cTopLevel =
 
 module St = struct
   type t = {
-    (* TODO: keeping the context around is a hack because we don't add types
-       to values during typechecking, which is what should be done. *)
-    ctx : bind Ctx.t;
     mutable counter : int;
     mutable type_tags : (ty * (cExpr * cExpr)) list;
         (** (type -> (type tag name, tag value)) list *)
   }
 
-  let create ctx = { ctx; counter = 0; type_tags = [] }
-
-  let ctx t = t.ctx
+  let create () = { counter = 0; type_tags = [] }
 
   let uniqIdent t =
     let fresh = `Ident ("_fresh_" ^ string_of_int t.counter) in
@@ -150,7 +144,8 @@ let rec codegen_expr st expr =
         ]
       in
       (stmtsCond @ cIfSeq, outV)
-  | Record fields ->
+  | Record { ty = None; _ } -> failwith "record not typed during checking"
+  | Record { fields; ty = Some rcdty } ->
       let stmts, rcd =
         List.fold_right
           (fun (field, value) (stmts, r) ->
@@ -159,9 +154,7 @@ let rec codegen_expr st expr =
             (stmts1 @ stmts, (cField, cValue) :: r))
           fields ([], [])
       in
-      (* TODO: the tag should really be added during typechecking *)
-      let rcdty = St.tagRcd st (typecheck (St.ctx st) expr) in
-      (stmts, rt_make_record rcdty rcd)
+      (stmts, rt_make_record (St.tagRcd st rcdty) rcd)
   | RecordProj (rcd, field) ->
       let stmts, cRcd = codegen_expr st rcd in
       (stmts, rt_record_proj cRcd field)
@@ -251,8 +244,8 @@ let emit_cTop = function
 
 (** Generates C code for the program, excluding the runtime code.
     Useful for checking C codegen in the repl. *)
-let codegen_c ctx fns expr =
-  let state = St.create ctx in
+let codegen_c fns expr =
+  let state = St.create () in
   let cFns = List.map (codegen_fn state) fns in
   let main =
     match expr with
@@ -281,8 +274,8 @@ let codegen_c ctx fns expr =
   List.map emit_cTop toplevels |> String.concat "\n"
 
 (** Generates C code with the runtime prepended. *)
-let codegen_c_w_rt ctx fns expr =
-  let userCode = codegen_c ctx fns expr in
+let codegen_c_w_rt fns expr =
+  let userCode = codegen_c fns expr in
   let runtime = "src/runtime.c" in
   let runtime =
     try open_in "src/runtime.c"

@@ -83,7 +83,7 @@ AtomicExpr:
   | IDENT LPAREN ArgList RPAREN
            { App (Var $1, $3) }
   | LCURLY RcdList RCURLY
-           { Record($2) }
+           { Record {fields=$2; ty=None} }
   | LPAREN Expr RPAREN
            { $2 }
   | AtomicExpr DOT IDENT
