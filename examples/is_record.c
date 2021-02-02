@@ -23,13 +23,17 @@ union _any {
   _record _record;
 } _any;
 
+typedef struct _tag {
+  unsigned v;
+} _tag;
+
 struct _tagged_any {
   int is_rcd;
-  const char* tag;
+  _tag tag;
   union _any val;
 };
 
-static const char *_NAT = "nat", *_STRING = "string", *_BOOL = "bool";
+static const _tag _NAT = {.v = 0}, _STRING = {.v = 1}, _BOOL = {.v = 2};
 
 _tagged_any _make_nat(int val) {
   union _any nat;
@@ -52,7 +56,7 @@ _tagged_any _make_bool(int val) {
   return result;
 }
 
-_tagged_any _make_record(const char* tag, int numFields, ...) {
+_tagged_any _make_record(const _tag tag, int numFields, ...) {
   _record rcd;
   rcd.numFields = numFields;
   rcd.fields = malloc(numFields * sizeof(const char*));
@@ -71,11 +75,9 @@ _tagged_any _make_record(const char* tag, int numFields, ...) {
   return result;
 }
 
-int _is1(_tagged_any val, const char* tag) {
-  return strcmp(val.tag, tag) == 0 ? 1 : 0;
-}
+int _is1(_tagged_any val, const _tag tag) { return val.tag.v == tag.v; }
 
-int _is(_tagged_any val, const char* const* _any_of, int num_opts) {
+int _is(_tagged_any val, const _tag* _any_of, int num_opts) {
   for (int i = 0; i < num_opts; ++i) {
     if (_is1(val, _any_of[i])) return 1;
   }
@@ -97,7 +99,7 @@ int _in(_tagged_any rcd, const char* field) {
 
 _tagged_any _record_proj(_tagged_any rcd, const char* field) {
   if (!rcd.is_rcd) {
-    fprintf(stderr, "Runtime error: attempting to project %s\n", rcd.tag);
+    fprintf(stderr, "Runtime error: attempting to project %d\n", rcd.tag.v);
     exit(1);
   }
   _record r = rcd.val._record;
@@ -106,7 +108,7 @@ _tagged_any _record_proj(_tagged_any rcd, const char* field) {
       return r.values[i];
     }
   }
-  fprintf(stderr, "Runtime error: no field %s in _record\n", field);
+  fprintf(stderr, "Runtime error: no field %s in record\n", field);
   exit(1);
 }
 
@@ -129,7 +131,7 @@ void _print1(_tagged_any _any) {
     }
     printf("}");
   } else {
-    fprintf(stderr, "Runtime error: no matching tag %s\n", _any.tag);
+    fprintf(stderr, "Runtime error: no matching tag %d\n", _any.tag.v);
     exit(1);
   }
 }
@@ -140,10 +142,10 @@ void _print(_tagged_any _any) {
 }
 
 // User code
-const char* ty_tag = "{a: bool, b: bool}";
+const _tag ty_tag = {.v = 100};
 _tagged_any a(_tagged_any p) {
   _tagged_any tmp;
-  const char* tags[] = {ty_tag};
+  const _tag tags[] = {ty_tag};
   if (_is(p, tags, 1)) {
     tmp = _record_proj(p, "a");
   } else {

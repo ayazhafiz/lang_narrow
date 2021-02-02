@@ -2,7 +2,13 @@ open Language
 open Ty
 
 type cType =
-  [ `TaggedAny | `Int | `Char | `Ptr of cType | `Arr of cType | `Const of cType ]
+  [ `Tag
+  | `TaggedAny
+  | `Int
+  | `Char
+  | `Ptr of cType
+  | `Arr of cType
+  | `Const of cType ]
 
 type cExpr =
   [ `Ident of string
@@ -10,7 +16,8 @@ type cExpr =
   | `String of string
   | `Bool of bool
   | `Call of cExpr * cExpr list
-  | `Array of cExpr list ]
+  | `Array of cExpr list
+  | `Struct of (string * cExpr) list ]
 
 type cDecl = [ `Decl of cType * cExpr * cExpr option ]
 
@@ -52,13 +59,16 @@ end = struct
 
   type t = {
     mutable scope : scope;
+    mutable tag_id : int;
+        (** ids to associate with type tags. All tags from user-defined types
+            are >=100. *)
     mutable type_tags : (ty * (cExpr * cExpr)) list;
         (** (type -> (type tag name, tag value)) list *)
   }
 
   let emptyScope () = { names = []; outer = None }
 
-  let create () = { scope = emptyScope (); type_tags = [] }
+  let create () = { scope = emptyScope (); tag_id = 100; type_tags = [] }
 
   let enterScope t = t.scope <- { (emptyScope ()) with outer = Some t.scope }
 
@@ -84,7 +94,8 @@ end = struct
     | Some (name, _) -> name
     | None ->
         let ident = freshIdent t "ty_tag" in
-        let tag = `String (string_of_ty rcdty) in
+        let tag = `Nat t.tag_id in
+        t.tag_id <- t.tag_id + 1;
         t.type_tags <- (rcdty, (ident, tag)) :: t.type_tags;
         ident
 
@@ -99,9 +110,10 @@ end = struct
           (Printf.sprintf "No runtime type tag for \"%s\"" (string_of_ty t))
 
   let codegen_tagDecls t =
-    let ty = `Const (`Ptr `Char) in
+    let ty = `Const `Tag in
+    let make v = `Struct [ ("v", v) ] in
     List.map
-      (fun (_, (name, v)) -> `Decl (`Decl (ty, name, Some v)))
+      (fun (_, (name, v)) -> `Decl (`Decl (ty, name, Some (make v))))
       t.type_tags
 end
 
@@ -125,7 +137,7 @@ let rt_print e = `Call (`Ident "_print", [ e ])
 let rt_is_tag st e ty =
   let tags = St.typeTag st ty in
   let tagsV = St.freshIdent st "tags" in
-  let tagsTy = `Arr (`Const (`Ptr `Char)) in
+  let tagsTy = `Arr (`Const `Tag) in
   let tagsDecl = `Decl (`Decl (tagsTy, tagsV, Some (`Array tags))) in
   ([ tagsDecl ], `Call (`Ident "_is", [ e; tagsV; `Nat (List.length tags) ]))
 
@@ -217,6 +229,7 @@ let codegen_fn state (Fn (name, params, _, body)) =
 let lines = String.split_on_char '\n'
 
 let rec emit_cTy = function
+  | `Tag -> "_tag"
   | `TaggedAny -> "_tagged_any"
   | `Int -> "int"
   | `Char -> "char"
@@ -236,6 +249,9 @@ let rec emit_cExpr e =
         (String.concat ", " (List.map emit_cExpr args))
   | `Array es ->
       List.map emit_cExpr es |> String.concat ", " |> Printf.sprintf "{%s}"
+  | `Struct fields ->
+      List.map (fun (n, e) -> Printf.sprintf ".%s = %s" n (emit_cExpr e)) fields
+      |> String.concat ", " |> Printf.sprintf "{%s}"
 
 let emit_cDecl (`Decl (ty, n, e)) =
   let rec pHeader = function
