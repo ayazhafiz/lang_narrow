@@ -29,30 +29,74 @@ type cTopLevel =
             Any parameters must always be of type "tagged_any". *)
   | `Decl of cDecl ]
 
-module St = struct
+module St : sig
+  type t
+
+  val create : unit -> t
+
+  val enterScope : t -> unit
+
+  val exitScope : t -> unit
+
+  val registerIdent : t -> cExpr -> unit
+
+  val freshIdent : t -> string -> cExpr
+
+  val typeTagRcd : t -> ty -> cExpr
+
+  val typeTag : t -> ty -> cExpr list
+
+  val codegen_tagDecls : t -> cTopLevel list
+end = struct
+  type scope = { mutable names : cExpr list; mutable outer : scope option }
+
   type t = {
-    mutable counter : int;
+    mutable scope : scope;
     mutable type_tags : (ty * (cExpr * cExpr)) list;
         (** (type -> (type tag name, tag value)) list *)
   }
 
-  let create () = { counter = 0; type_tags = [] }
+  let emptyScope () = { names = []; outer = None }
 
-  let uniqIdent t =
-    let fresh = `Ident ("_fresh_" ^ string_of_int t.counter) in
-    t.counter <- t.counter + 1;
-    fresh
+  let create () = { scope = emptyScope (); type_tags = [] }
 
-  let tagRcd t = function
-    | TyRecord _ as ty -> (
-        match List.assoc_opt ty t.type_tags with
-        | Some (name, _) -> name
-        | None ->
-            let ident = uniqIdent t in
-            let tag = `String (string_of_ty ty) in
-            t.type_tags <- (ty, (ident, tag)) :: t.type_tags;
-            ident )
-    | _ -> failwith "not a record"
+  let enterScope t = t.scope <- { (emptyScope ()) with outer = Some t.scope }
+
+  let exitScope t =
+    match t.scope.outer with
+    | Some s -> t.scope <- s
+    | None -> failwith "cannot exit top-level scope"
+
+  let registerIdent t ident = t.scope.names <- ident :: t.scope.names
+
+  let freshIdent t hint =
+    let rec walk n =
+      let cand = `Ident (hint ^ if n = 0 then "" else string_of_int n) in
+      if List.mem cand t.scope.names then walk (n + 1)
+      else (
+        registerIdent t cand;
+        cand )
+    in
+    walk 0
+
+  let typeTagRcd t rcdty =
+    match List.assoc_opt rcdty t.type_tags with
+    | Some (name, _) -> name
+    | None ->
+        let ident = freshIdent t "ty_tag" in
+        let tag = `String (string_of_ty rcdty) in
+        t.type_tags <- (rcdty, (ident, tag)) :: t.type_tags;
+        ident
+
+  let rec typeTag t = function
+    | TyPrim TyNat -> [ `Ident "_NAT" ]
+    | TyPrim TyString -> [ `Ident "_STRING" ]
+    | TyPrim TyBool -> [ `Ident "_BOOL" ]
+    | TyRecord _ as ty -> [ typeTagRcd t ty ]
+    | TyUnion v -> TySet.to_seq v |> List.of_seq |> List.concat_map (typeTag t)
+    | t ->
+        failwith
+          (Printf.sprintf "No runtime type tag for \"%s\"" (string_of_ty t))
 
   let codegen_tagDecls t =
     let ty = `Const (`Ptr `Char) in
@@ -61,44 +105,31 @@ module St = struct
       t.type_tags
 end
 
-(* TODO: real unique and non-colliding identifiers *)
-let gen `Ident originalId = `Ident ("_" ^ originalId)
+let rt_make_nat e = `Call (`Ident "_make_nat", [ e ])
 
-let rt_make_nat e = `Call (`Ident "make_nat", [ e ])
+let rt_make_string e = `Call (`Ident "_make_string", [ e ])
 
-let rt_make_string e = `Call (`Ident "make_string", [ e ])
-
-let rt_make_bool e = `Call (`Ident "make_bool", [ e ])
+let rt_make_bool e = `Call (`Ident "_make_bool", [ e ])
 
 let rt_make_record ty fields =
   `Call
-    ( `Ident "make_record",
+    ( `Ident "_make_record",
       ty
       :: `Nat (List.length fields)
       :: List.concat_map (fun (a, b) -> [ a; b ]) fields )
 
-let rt_record_proj e field = `Call (`Ident "record_proj", [ e; `String field ])
+let rt_record_proj e field = `Call (`Ident "_record_proj", [ e; `String field ])
 
-let rt_print e = `Call (`Ident "print", [ e ])
+let rt_print e = `Call (`Ident "_print", [ e ])
 
 let rt_is_tag st e ty =
-  let rec tag = function
-    | TyPrim TyNat -> [ `Ident "NAT" ]
-    | TyPrim TyString -> [ `Ident "STRING" ]
-    | TyPrim TyBool -> [ `Ident "BOOL" ]
-    | TyRecord _ as ty -> [ St.tagRcd st ty ]
-    | TyUnion v -> TySet.to_seq v |> List.of_seq |> List.concat_map tag
-    | t ->
-        failwith
-          (Printf.sprintf "No runtime type tag for \"%s\"" (string_of_ty t))
-  in
-  let tags = tag ty in
-  let tagsV = St.uniqIdent st in
+  let tags = St.typeTag st ty in
+  let tagsV = St.freshIdent st "tags" in
   let tagsTy = `Arr (`Const (`Ptr `Char)) in
-  let tagsDecl = `Decl (`Decl (tagsTy, tagsV, Some (`Array (tag ty)))) in
-  ([ tagsDecl ], `Call (`Ident "is", [ e; tagsV; `Nat (List.length tags) ]))
+  let tagsDecl = `Decl (`Decl (tagsTy, tagsV, Some (`Array tags))) in
+  ([ tagsDecl ], `Call (`Ident "_is", [ e; tagsV; `Nat (List.length tags) ]))
 
-let rt_in_record rcd field = `Call (`Ident "in", [ rcd; `String field ])
+let rt_in_record rcd field = `Call (`Ident "_in", [ rcd; `String field ])
 
 (*                     *)
 (* Codegen Translation *)
@@ -107,7 +138,7 @@ let rt_in_record rcd field = `Call (`Ident "in", [ rcd; `String field ])
 (* codegen_expr :: state -> expr -> (cStmt list, cExpr) *)
 let rec codegen_expr st expr =
   match expr with
-  | Var n -> ([], gen `Ident n)
+  | Var n -> ([], `Ident n)
   | Nat n -> ([], rt_make_nat (`Nat n))
   | String s -> ([], rt_make_string (`String s))
   | Bool b -> ([], rt_make_bool (`Bool b))
@@ -126,7 +157,7 @@ let rec codegen_expr st expr =
       let stmts2, is_tag = rt_is_tag st e ty in
       (stmts @ stmts2, is_tag)
   | If (cond, left, right) ->
-      let outV = St.uniqIdent st in
+      let outV = St.freshIdent st "tmp" in
       let condStmts, cCond = codegen_expr st cond in
 
       let stmtsL, cLeft = codegen_expr st left in
@@ -154,7 +185,7 @@ let rec codegen_expr st expr =
             (stmts1 @ stmts, (cField, cValue) :: r))
           fls ([], [])
       in
-      (stmts, rt_make_record (St.tagRcd st rcdty) rcd)
+      (stmts, rt_make_record (St.typeTagRcd st rcdty) rcd)
   | RecordProj (rcd, field) ->
       let stmts, cRcd = codegen_expr st rcd in
       (stmts, rt_record_proj cRcd field)
@@ -163,13 +194,21 @@ let rec codegen_expr st expr =
       (stmts, rt_in_record cRcd field)
 
 let codegen_fn state (Fn (name, params, _, body)) =
+  let fnIdent = `Ident name in
+  St.registerIdent state fnIdent;
+  St.enterScope state;
+  let params =
+    List.map
+      (fun (p, _) ->
+        let pIdent = `Ident p in
+        St.registerIdent state pIdent;
+        `Decl (`TaggedAny, pIdent, None))
+      params
+  in
   let stmts, bodyExpr = codegen_expr state body in
   let body = stmts @ [ `Return bodyExpr ] in
-  `Fn
-    ( `TaggedAny,
-      gen `Ident name,
-      List.map (fun (p, _) -> `Decl (`TaggedAny, gen `Ident p, None)) params,
-      body )
+  St.exitScope state;
+  `Fn (`TaggedAny, fnIdent, params, body)
 
 (*      *)
 (* Emit *)
@@ -178,7 +217,7 @@ let codegen_fn state (Fn (name, params, _, body)) =
 let lines = String.split_on_char '\n'
 
 let rec emit_cTy = function
-  | `TaggedAny -> "tagged_any"
+  | `TaggedAny -> "_tagged_any"
   | `Int -> "int"
   | `Char -> "char"
   | `Ptr t -> Printf.sprintf "%s*" (emit_cTy t)
@@ -252,7 +291,7 @@ let codegen_c fns expr =
     | None -> []
     | Some expr ->
         let stmts1, cExpr = codegen_expr state expr in
-        let stmts2, exprVar = codegen_expr state (Var "_main_result") in
+        let stmts2, exprVar = codegen_expr state (Var "result") in
         let mainN = `Ident "main" in
         let cMain =
           `Fn
