@@ -103,9 +103,9 @@ let rec string_of_ty t =
   | TyRecord fields ->
       Printf.sprintf "{%s}"
         (String.concat ", "
-           ( OrdSMap.to_seq fields |> List.of_seq
+           (OrdSMap.to_seq fields |> List.of_seq
            |> List.map (fun (f, t) ->
-                  Printf.sprintf "%s: %s" f (string_of_ty t)) ))
+                  Printf.sprintf "%s: %s" f (string_of_ty t))))
 
 and string_of_expr e =
   match e with
@@ -124,9 +124,9 @@ and string_of_expr e =
   | Record { fields; _ } ->
       Printf.sprintf "{%s}"
         (String.concat ", "
-           ( OrdSMap.to_seq fields |> List.of_seq
+           (OrdSMap.to_seq fields |> List.of_seq
            |> List.map (fun (f, e) ->
-                  Printf.sprintf "%s: %s" f (string_of_expr e)) ))
+                  Printf.sprintf "%s: %s" f (string_of_expr e))))
   | RecordProj (recv, key) -> Printf.sprintf "%s.%s" (string_of_expr recv) key
   | RecordNarrow (field, rcd) ->
       Printf.sprintf "%s in %s" field (string_of_expr rcd)

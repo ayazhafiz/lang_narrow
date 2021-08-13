@@ -143,14 +143,14 @@ void _print(_tagged_any _any) {
 
 // User code
 _tagged_any a(_tagged_any p) {
-  _tagged_any tmp;
-  const _tag tags[] = {_STRING, _BOOL};
-  if (_is(p, tags, 2)) {
-    tmp = _make_nat(0);
+  _tagged_any tmp0;
+  const _tag tags0[] = {_STRING, _BOOL};
+  if (_is(p, tags0, 2)) {
+    tmp0 = _make_nat(0);
   } else {
-    tmp = p;
+    tmp0 = p;
   }
-  return tmp;
+  return tmp0;
 }
 int main() {
   _tagged_any result = a(_make_string("h"));

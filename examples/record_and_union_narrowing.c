@@ -142,36 +142,40 @@ void _print(_tagged_any _any) {
 }
 
 // User code
-const _tag ty_tag = {.v = 100};
+const _tag ty_tag1 = {.v = 101};
+const _tag ty_tag0 = {.v = 100};
 _tagged_any defaultNat() {
   return _make_nat(1729);
 }
 _tagged_any readNat(_tagged_any n) {
-  _tagged_any tmp;
-  const _tag tags[] = {_NAT};
-  if (_is(n, tags, 1)) {
-    tmp = n;
+  _tagged_any tmp0;
+  const _tag tags0[] = {_NAT};
+  if (_is(n, tags0, 1)) {
+    tmp0 = n;
   } else {
-    tmp = defaultNat();
+    tmp0 = defaultNat();
   }
-  return tmp;
+  return tmp0;
 }
 _tagged_any narrowB(_tagged_any p) {
-  _tagged_any tmp;
+  _tagged_any tmp1;
   if (_in(p, "b")) {
-    tmp = readNat(_record_proj(p, "b"));
+    tmp1 = readNat(_record_proj(p, "b"));
   } else {
-    _tagged_any tmp1;
+    _tagged_any tmp2;
     if (_in(p, "noBInMe")) {
-      tmp1 = _record_proj(p, "noBInMe");
+      tmp2 = _record_proj(p, "noBInMe");
     } else {
-      tmp1 = p;
+      tmp2 = p;
     }
-    tmp = tmp1;
+    tmp1 = tmp2;
   }
-  return tmp;
+  return tmp1;
+}
+_tagged_any asdasdasd() {
+  return _make_record(ty_tag0, 1, "a", _make_nat(1));
 }
 int main() {
-  _tagged_any result = narrowB(_make_record(ty_tag, 6, "b", _make_string("not a nat"), "c", _make_nat(9), "explanationA", _make_string("This record gains admission to narrowB as it is a subtype of"), "explanationB", _make_string("{b: string, c: nat}"), "explanationC", _make_string("Through a series of type narrowings the call lands at emission"), "explanationD", _make_string("of 1729 via defaultNat() because b is a string.")));
+  _tagged_any result = narrowB(_make_record(ty_tag1, 6, "b", _make_string("not a nat"), "c", _make_nat(9), "explanationA", _make_string("This record gains admission to narrowB as it is a subtype of"), "explanationB", _make_string("{b: string, c: nat}"), "explanationC", _make_string("Through a series of type narrowings the call lands at emission"), "explanationD", _make_string("of 1729 via defaultNat() because b is a string.")));
   _print(result);
 }

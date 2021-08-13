@@ -5,3 +5,5 @@ node_modules/
 www/*.js
 www/*.map
 www/*.ml
+www/*.html
+!www/*-template.html

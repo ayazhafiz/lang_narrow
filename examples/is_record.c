@@ -142,18 +142,18 @@ void _print(_tagged_any _any) {
 }
 
 // User code
-const _tag ty_tag = {.v = 100};
+const _tag ty_tag0 = {.v = 100};
 _tagged_any a(_tagged_any p) {
-  _tagged_any tmp;
-  const _tag tags[] = {ty_tag};
-  if (_is(p, tags, 1)) {
-    tmp = _record_proj(p, "a");
+  _tagged_any tmp0;
+  const _tag tags0[] = {ty_tag0};
+  if (_is(p, tags0, 1)) {
+    tmp0 = _record_proj(p, "a");
   } else {
-    tmp = _make_bool(0);
+    tmp0 = _make_bool(0);
   }
-  return tmp;
+  return tmp0;
 }
 int main() {
-  _tagged_any result = a(_make_record(ty_tag, 2, "a", _make_bool(1), "b", _make_bool(0)));
+  _tagged_any result = a(_make_record(ty_tag0, 2, "a", _make_bool(1), "b", _make_bool(0)));
   _print(result);
 }

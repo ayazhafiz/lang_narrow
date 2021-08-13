@@ -16,6 +16,8 @@ fn narrowB(p: nat|{a: bool, b: nat}|{b: string, c: nat}|{noBInMe: nat}): nat {
           else p
 }
 
+fn asdasdasd(): {a: nat} { {a: 1} }
+
 narrowB(
   { explanationA: "This record gains admission to narrowB as it is a subtype of"
   , explanationB: "{b: string, c: nat}"

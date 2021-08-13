@@ -33,35 +33,17 @@ and cBlock = cStmt list
 type cTopLevel =
   [ `Fn of cType * cExpr * cDecl list * cBlock
     (** cFn is a C function with a name, parameter list, and a return expression.
-            Any parameters must always be of type "tagged_any". *)
+          Any parameters must always be of type "tagged_any". *)
   | `Decl of cDecl ]
 
-module St : sig
-  type t
-
-  val create : unit -> t
-
-  val enterScope : t -> unit
-
-  val exitScope : t -> unit
-
-  val registerIdent : t -> cExpr -> unit
-
-  val freshIdent : t -> string -> cExpr
-
-  val typeTagRcd : t -> ty -> cExpr
-
-  val typeTag : t -> ty -> cExpr list
-
-  val codegen_tagDecls : t -> cTopLevel list
-end = struct
+module St = struct
   type scope = { mutable names : cExpr list; mutable outer : scope option }
 
   type t = {
     mutable scope : scope;
     mutable tag_id : int;
         (** ids to associate with type tags. All tags from user-defined types
-            are >=100. *)
+        are >=100. *)
     mutable type_tags : (ty * (cExpr * cExpr)) list;
         (** (type -> (type tag name, tag value)) list *)
   }
@@ -77,15 +59,21 @@ end = struct
     | Some s -> t.scope <- s
     | None -> failwith "cannot exit top-level scope"
 
-  let registerIdent t ident = t.scope.names <- ident :: t.scope.names
+  (** Is this really ugly? Yes. Do I want to make it better? Yes.
+      Will I? Probably not. *)
+  let __all_idents = ref []
+
+  let registerIdent t ident =
+    t.scope.names <- ident :: t.scope.names;
+    __all_idents := ident :: !__all_idents
 
   let freshIdent t hint =
     let rec walk n =
-      let cand = `Ident (hint ^ if n = 0 then "" else string_of_int n) in
-      if List.mem cand t.scope.names then walk (n + 1)
+      let cand = `Ident (hint ^ string_of_int n) in
+      if List.mem cand !__all_idents then walk (n + 1)
       else (
         registerIdent t cand;
-        cand )
+        cand)
     in
     walk 0
 
