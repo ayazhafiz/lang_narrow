@@ -59,9 +59,9 @@ let _ =
            let bindings, codegen = lang_narrow (Js.to_string program) in
            object%js
              val bindings = Js.string bindings [@@readonly]
-
              val codegen = Js.string codegen [@@readonly]
            end
          with Failure msg ->
-           Js.raise_js_error (new%js error_constr (Js.string msg))
+           Js_error.raise_
+             (Js_error.of_error (new%js error_constr (Js.string msg)))
     end)
